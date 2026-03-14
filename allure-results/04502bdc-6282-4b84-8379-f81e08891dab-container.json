@@ -1,1 +1,0 @@
-{"uuid": "7379507b-9572-4957-b77a-86c5c2660d82", "children": ["9c08e14a-7efc-491e-86f1-a2d2298139f6"], "befores": [{"name": "clean_test_redis", "status": "passed", "start": 1773347425776, "stop": 1773347425776}], "afters": [{"name": "clean_test_redis::0", "status": "passed", "start": 1773347425779, "stop": 1773347425780}], "start": 1773347425776, "stop": 1773347425780}

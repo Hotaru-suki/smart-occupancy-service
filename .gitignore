@@ -9,6 +9,9 @@ __pycache__/
 venv/
 env/
 
+#测试结构
+allure-results
+
 # 日志
 logs/
 *.log
