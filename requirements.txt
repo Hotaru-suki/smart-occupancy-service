@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+sqlalchemy
+pymysql
+redis
+opencv-python
+ultralytics
+aiortc
+av
+pydantic
+pydantic-settings
+pytest
+requests
+allure-pytest
