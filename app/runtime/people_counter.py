@@ -21,6 +21,7 @@ class PeopleCounter(BaseCounter):
         video_source=0,
         model_path="yolov8n.pt",
         roi=None,
+        region_id: int = 1,
         enter_frames=5,
         leave_seconds=2.0,
         confidence=0.4,
@@ -34,6 +35,7 @@ class PeopleCounter(BaseCounter):
 
         self.cap = None
         self.roi = roi if roi is not None else (100, 100, 500, 400)
+        self.region_id = region_id
 
         self.enter_frames = enter_frames
         self.leave_seconds = leave_seconds
@@ -76,7 +78,7 @@ class PeopleCounter(BaseCounter):
         self._refresh_status_snapshot()
 
         logger.info(
-            f"PeopleCounter 初始化完成: source={self.video_source}, roi={self.roi}",
+            f"PeopleCounter 初始化完成: source={self.video_source}, roi={self.roi}, region_id={self.region_id}",
             extra={"event": "people_counter_init"}
         )
 
@@ -115,6 +117,7 @@ class PeopleCounter(BaseCounter):
     def _append_event(self, event_type, people_count):
         event = {
             "timestamp": self._now_str(),
+            "region_id": self.region_id,
             "event": event_type,
             "people_count": people_count
         }
@@ -122,7 +125,7 @@ class PeopleCounter(BaseCounter):
         self.events.append(event)
         self.events = self.events[-100:]
 
-        event_service.publish_occupancy_event(event_type, people_count)
+        event_service.publish_occupancy_event(self.region_id, event_type, people_count)
 
     def _sync_daily_stat_to_mysql(self):
         try:
@@ -272,7 +275,7 @@ class PeopleCounter(BaseCounter):
                 self._append_event("enter_region", people_in_roi)
 
                 logger.info(
-                    f"区域进入事件触发: people_count={people_in_roi}",
+                    f"区域进入事件触发: region_id={self.region_id}, people_count={people_in_roi}",
                     extra={"event": "enter_region"}
                 )
         else:
@@ -291,7 +294,7 @@ class PeopleCounter(BaseCounter):
                     self._append_event("leave_region", 0)
 
                     logger.info(
-                        "区域离开事件触发",
+                        f"区域离开事件触发: region_id={self.region_id}",
                         extra={"event": "leave_region"}
                     )
 

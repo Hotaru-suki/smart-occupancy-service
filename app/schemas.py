@@ -34,7 +34,45 @@ class EventItem(BaseModel):
     timestamp: str
     event: str
     people_count: int
+    region_id: Optional[int] = None
 
+
+class EventsResponse(BaseModel):
+    mock: bool
+    events: List[EventItem]
+
+
+class HealthResponse(BaseModel):
+    mock: bool
+    supports_video: bool
+    running: bool
+    camera_ok: bool
+    detector_ok: bool
+    last_frame_time: Optional[str]
+    last_error: Optional[str]
+    timestamp: str
+
+
+class WebRTCOffer(BaseModel):
+    sdp: str
+    type: Literal["offer"]
+
+
+class WebRTCAnswer(BaseModel):
+    sdp: str
+    type: Literal["answer"]
+
+
+class HistoryEventItem(BaseModel):
+    id: int
+    region_name: str
+    event_type: str
+    people_count: int
+    event_time: str
+
+
+class HistoryEventsResponse(BaseModel):
+    items: List[HistoryEventItem]
 
 class EventsResponse(BaseModel):
     mock: bool

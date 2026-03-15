@@ -18,18 +18,17 @@ class EventWorker:
         if message.get("type") != "occupancy_event":
             return
 
+        region_id = message["region_id"]
         event_type = message["event"]
         people_count = message["people_count"]
 
-        # Redis 最近事件缓存
         redis_client.lpush("occupancy:events", json.dumps(message, ensure_ascii=False))
         redis_client.ltrim("occupancy:events", 0, 99)
 
-        # MySQL 落库
-        self._event_repo.save_event(event_type, people_count)
+        self._event_repo.save_event(region_id, event_type, people_count)
 
         logger.info(
-            f"事件异步处理完成: {event_type}, people_count={people_count}",
+            f"事件异步处理完成: region_id={region_id}, {event_type}, people_count={people_count}",
             extra={"event": "event_worker_processed"}
         )
 

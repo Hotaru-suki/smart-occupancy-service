@@ -11,8 +11,9 @@ from app.services.event_service import event_service
 
 
 class MockPeopleCounter(BaseCounter):
-    def __init__(self, roi=None, interval=1.0, mock=True):
+    def __init__(self, roi=None, region_id: int = 1, interval=1.0, mock=True):
         self.roi = roi if roi is not None else (100, 100, 500, 400)
+        self.region_id = region_id
         self.interval = interval
         self.mock = mock
 
@@ -54,7 +55,7 @@ class MockPeopleCounter(BaseCounter):
         self._refresh_status_snapshot()
 
         logger.info(
-            f"MockPeopleCounter 初始化完成: roi={self.roi}, interval={self.interval}",
+            f"MockPeopleCounter 初始化完成: roi={self.roi}, region_id={self.region_id}, interval={self.interval}",
             extra={"event": "mock_counter_init"}
         )
 
@@ -70,6 +71,7 @@ class MockPeopleCounter(BaseCounter):
     def _append_event(self, event_type, people_count):
         event = {
             "timestamp": self._now_str(),
+            "region_id": self.region_id,
             "event": event_type,
             "people_count": people_count
         }
@@ -77,7 +79,7 @@ class MockPeopleCounter(BaseCounter):
         self.events.append(event)
         self.events = self.events[-100:]
 
-        event_service.publish_occupancy_event(event_type, people_count)
+        event_service.publish_occupancy_event(self.region_id, event_type, people_count)
 
     def _sync_daily_stat_to_mysql(self):
         try:
@@ -163,7 +165,7 @@ class MockPeopleCounter(BaseCounter):
                 self._append_event("enter_region", people)
 
                 logger.info(
-                    f"Mock区域进入事件触发: people_count={people}",
+                    f"Mock区域进入事件触发: region_id={self.region_id}, people_count={people}",
                     extra={"event": "mock_enter_region"}
                 )
         else:
@@ -175,7 +177,7 @@ class MockPeopleCounter(BaseCounter):
                 self._append_event("leave_region", 0)
 
                 logger.info(
-                    "Mock区域离开事件触发",
+                    f"Mock区域离开事件触发: region_id={self.region_id}",
                     extra={"event": "mock_leave_region"}
                 )
 
