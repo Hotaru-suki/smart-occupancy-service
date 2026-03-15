@@ -30,6 +30,7 @@ logs/
 *.sqlite3
 
 # Test / report artifacts
+monitoring/
 allure-results/
 allure-report/
 polling-report-*/
