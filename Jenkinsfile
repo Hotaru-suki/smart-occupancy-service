@@ -1,3 +1,60 @@
+def startMonitor(pyExe, keyword, label, outputFile, summaryFile) {
+    bat """
+    > start_monitor.ps1 echo \$p = Start-Process -FilePath '${pyExe}' -ArgumentList 'scripts\\\\monitor_resources.py','--interval','1','--keyword','${keyword}','--label','${label}','--output','${outputFile}','--summary-output','${summaryFile}' -PassThru
+    >> start_monitor.ps1 echo \$p.Id ^| Out-File -FilePath 'monitor.pid' -Encoding ascii
+    powershell -NoProfile -ExecutionPolicy Bypass -File start_monitor.ps1
+    ping 127.0.0.1 -n 3 >nul
+    """
+}
+
+def stopMonitor() {
+    bat """
+    if exist monitor.pid (
+        for /f %%i in (monitor.pid) do taskkill /PID %%i /T /F >nul 2>nul
+        del /f /q monitor.pid
+    )
+    """
+}
+
+def runLoadStage(scriptCtx, scenarioName, threads, ramp, loops, jmxFile, resultFile, reportDir) {
+    def label = "${scenarioName}_${threads}"
+    def monitorCsv = "monitoring\\\\${label}_resources.csv"
+
+    scriptCtx.startMonitor(
+        scriptCtx.env.PYTHON_EXE,
+        scriptCtx.env.MONITOR_KEYWORD,
+        label,
+        monitorCsv,
+        scriptCtx.env.MONITOR_SUMMARY
+    )
+
+    try {
+        scriptCtx.bat """
+        "${scriptCtx.env.JMETER_HOME}\\bin\\jmeter.bat" -n -t ${jmxFile} -Jthreads=${threads} -Jramp=${ramp} -Jloops=${loops} -l ${resultFile} -e -o ${reportDir}
+        """
+    } finally {
+        scriptCtx.stopMonitor()
+    }
+
+    int breakerStatus = scriptCtx.bat(
+        returnStatus: true,
+        script: """
+        "${scriptCtx.env.PYTHON_EXE}" scripts\\check_jmeter_breaker.py --jtl ${resultFile} --label ${label} --summary "${scriptCtx.env.BREAKER_SUMMARY}" --max-error-rate ${scriptCtx.env.BREAKER_MAX_ERROR_RATE} --max-p95-ms ${scriptCtx.env.BREAKER_MAX_P95_MS} --min-samples 20
+        """
+    )
+
+    if (breakerStatus == 2) {
+        scriptCtx.echo "Breaker triggered for ${label}, higher concurrency of same scenario will be skipped."
+        return false
+    }
+
+    if (breakerStatus != 0) {
+        scriptCtx.error("Breaker script failed for ${label}")
+    }
+
+    return true
+}
+
 pipeline {
     agent any
 
@@ -8,24 +65,34 @@ pipeline {
     }
 
     environment {
-        PROJECT_DIR        = 'C:\\Users\\siest\\Desktop\\api'
-        PYTHON_EXE         = 'C:\\Users\\siest\\Desktop\\api\\.venv\\Scripts\\python.exe'
-        JMETER_HOME        = 'D:\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3'
-        ALLURE_RESULTS     = 'allure-results'
+        PROJECT_DIR              = 'C:\\Users\\siest\\Desktop\\api'
+        PYTHON_EXE               = 'C:\\Users\\siest\\Desktop\\api\\.venv\\scripts\\python.exe'
+        JMETER_HOME              = 'D:\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3'
+        ALLURE_RESULTS           = 'allure-results'
 
-        APP_LOG            = 'logs\\app.log'
-        ERROR_LOG          = 'logs\\error.log'
+        APP_LOG                  = 'logs\\app.log'
+        ERROR_LOG                = 'logs\\error.log'
 
-        BACKEND_PID_FILE   = 'backend.pid'
-        START_PS1          = 'start_backend.ps1'
-        SMOKE_PS1          = 'smoke_check.ps1'
-        KILL_PS1           = 'kill_backend.ps1'
+        BACKEND_PID_FILE         = 'backend.pid'
+        START_PS1                = 'start_backend.ps1'
+        SMOKE_PS1                = 'smoke_check.ps1'
+        KILL_PS1                 = 'kill_backend.ps1'
 
-        ENV_FILE           = '.env'
-        ENV_TEST_FILE      = '.env.test'
-        ENV_BACKUP_FILE    = '.env.bak'
+        ENV_FILE                 = '.env'
+        ENV_TEST_FILE            = '.env.test'
+        ENV_BACKUP_FILE          = '.env.bak'
 
-        PYTHONIOENCODING   = 'utf-8'
+        MONITOR_PID_FILE         = 'monitor.pid'
+        MONITOR_PS1              = 'start_monitor.ps1'
+        MONITOR_OUTPUT_DIR       = 'monitoring'
+        MONITOR_SUMMARY          = 'monitoring\\monitor_summary.csv'
+        MONITOR_KEYWORD          = 'uvicorn'
+
+        BREAKER_SUMMARY          = 'monitoring\\breaker_summary.csv'
+        BREAKER_MAX_ERROR_RATE   = '5'
+        BREAKER_MAX_P95_MS       = '2000'
+
+        PYTHONIOENCODING         = 'utf-8'
     }
 
     stages {
@@ -78,6 +145,16 @@ pipeline {
                         exit /b 1
                     )
 
+                    if not exist "scripts\\monitor_resources.py" (
+                        echo [ERROR] scripts\\monitor_resources.py not found
+                        exit /b 1
+                    )
+
+                    if not exist "scripts\\check_jmeter_breaker.py" (
+                        echo [ERROR] scripts\\check_jmeter_breaker.py not found
+                        exit /b 1
+                    )
+
                     if not exist "%JMETER_HOME%\\bin\\jmeter.bat" (
                         echo [ERROR] JMeter not found: %JMETER_HOME%\\bin\\jmeter.bat
                         exit /b 1
@@ -105,6 +182,7 @@ pipeline {
                     copy /Y "%ENV_TEST_FILE%" "%ENV_FILE%"
 
                     if not exist logs mkdir logs
+                    if not exist monitoring mkdir monitoring
                     '''
                 }
             }
@@ -139,42 +217,47 @@ pipeline {
 
                     if exist allure-report rmdir /s /q allure-report
                     if exist health-report rmdir /s /q health-report
-                    if exist status-report rmdir /s /q status-report
-                    if exist polling-report rmdir /s /q polling-report
 
-                    if exist status-report-10 rmdir /s /q status-report-10
-                    if exist status-report-30 rmdir /s /q status-report-30
+                    if exist monitoring rmdir /s /q monitoring
+                    mkdir monitoring
+
+                    if exist status-report-20 rmdir /s /q status-report-20
                     if exist status-report-50 rmdir /s /q status-report-50
-                    if exist status-report-80 rmdir /s /q status-report-80
                     if exist status-report-100 rmdir /s /q status-report-100
+                    if exist status-report-150 rmdir /s /q status-report-150
+                    if exist status-report-200 rmdir /s /q status-report-200
+                    if exist status-report-300 rmdir /s /q status-report-300
 
-                    if exist polling-report-10 rmdir /s /q polling-report-10
-                    if exist polling-report-30 rmdir /s /q polling-report-30
+                    if exist polling-report-20 rmdir /s /q polling-report-20
                     if exist polling-report-50 rmdir /s /q polling-report-50
-                    if exist polling-report-80 rmdir /s /q polling-report-80
                     if exist polling-report-100 rmdir /s /q polling-report-100
+                    if exist polling-report-150 rmdir /s /q polling-report-150
+                    if exist polling-report-200 rmdir /s /q polling-report-200
+                    if exist polling-report-300 rmdir /s /q polling-report-300
 
                     if exist health-result.jtl del /f /q health-result.jtl
-                    if exist status-result.jtl del /f /q status-result.jtl
-                    if exist polling-result.jtl del /f /q polling-result.jtl
 
-                    if exist status-result-10.jtl del /f /q status-result-10.jtl
-                    if exist status-result-30.jtl del /f /q status-result-30.jtl
+                    if exist status-result-20.jtl del /f /q status-result-20.jtl
                     if exist status-result-50.jtl del /f /q status-result-50.jtl
-                    if exist status-result-80.jtl del /f /q status-result-80.jtl
                     if exist status-result-100.jtl del /f /q status-result-100.jtl
+                    if exist status-result-150.jtl del /f /q status-result-150.jtl
+                    if exist status-result-200.jtl del /f /q status-result-200.jtl
+                    if exist status-result-300.jtl del /f /q status-result-300.jtl
 
-                    if exist polling-result-10.jtl del /f /q polling-result-10.jtl
-                    if exist polling-result-30.jtl del /f /q polling-result-30.jtl
+                    if exist polling-result-20.jtl del /f /q polling-result-20.jtl
                     if exist polling-result-50.jtl del /f /q polling-result-50.jtl
-                    if exist polling-result-80.jtl del /f /q polling-result-80.jtl
                     if exist polling-result-100.jtl del /f /q polling-result-100.jtl
+                    if exist polling-result-150.jtl del /f /q polling-result-150.jtl
+                    if exist polling-result-200.jtl del /f /q polling-result-200.jtl
+                    if exist polling-result-300.jtl del /f /q polling-result-300.jtl
 
                     if exist %BACKEND_PID_FILE% del /f /q %BACKEND_PID_FILE%
+                    if exist %MONITOR_PID_FILE% del /f /q %MONITOR_PID_FILE%
 
                     if exist %START_PS1% del /f /q %START_PS1%
                     if exist %SMOKE_PS1% del /f /q %SMOKE_PS1%
                     if exist %KILL_PS1% del /f /q %KILL_PS1%
+                    if exist %MONITOR_PS1% del /f /q %MONITOR_PS1%
                     '''
                 }
             }
@@ -254,102 +337,68 @@ pipeline {
             }
         }
 
-        stage('Run JMeter - Status Load 10') {
+        stage('Run Status Load Ladder') {
             steps {
                 dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    "%JMETER_HOME%\\bin\\jmeter.bat" -n -t jmeter\\status_load.jmx -Jthreads=10 -Jramp=5 -Jloops=30 -l status-result-10.jtl -e -o status-report-10
-                    '''
+                    script {
+                        def continueStatus = true
+
+                        if (continueStatus) {
+                            continueStatus = runLoadStage(this, "status", 20, 5, 40, "jmeter\\status_load.jmx", "status-result-20.jtl", "status-report-20")
+                        }
+                        if (continueStatus) {
+                            continueStatus = runLoadStage(this, "status", 50, 10, 40, "jmeter\\status_load.jmx", "status-result-50.jtl", "status-report-50")
+                        }
+                        if (continueStatus) {
+                            continueStatus = runLoadStage(this, "status", 100, 20, 40, "jmeter\\status_load.jmx", "status-result-100.jtl", "status-report-100")
+                        }
+                        if (continueStatus) {
+                            continueStatus = runLoadStage(this, "status", 150, 30, 40, "jmeter\\status_load.jmx", "status-result-150.jtl", "status-report-150")
+                        }
+                        if (continueStatus) {
+                            continueStatus = runLoadStage(this, "status", 200, 40, 40, "jmeter\\status_load.jmx", "status-result-200.jtl", "status-report-200")
+                        }
+                        if (continueStatus) {
+                            continueStatus = runLoadStage(this, "status", 300, 60, 40, "jmeter\\status_load.jmx", "status-result-300.jtl", "status-report-300")
+                        }
+
+                        if (!continueStatus) {
+                            echo 'Status load ladder stopped by breaker.'
+                        }
+                    }
                 }
             }
         }
 
-        stage('Run JMeter - Status Load 30') {
+        stage('Run Polling Load Ladder') {
             steps {
                 dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    "%JMETER_HOME%\\bin\\jmeter.bat" -n -t jmeter\\status_load.jmx -Jthreads=30 -Jramp=10 -Jloops=30 -l status-result-30.jtl -e -o status-report-30
-                    '''
-                }
-            }
-        }
+                    script {
+                        def continuePolling = true
 
-        stage('Run JMeter - Status Load 50') {
-            steps {
-                dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    "%JMETER_HOME%\\bin\\jmeter.bat" -n -t jmeter\\status_load.jmx -Jthreads=50 -Jramp=15 -Jloops=30 -l status-result-50.jtl -e -o status-report-50
-                    '''
-                }
-            }
-        }
+                        if (continuePolling) {
+                            continuePolling = runLoadStage(this, "polling", 20, 5, 40, "jmeter\\page_polling_load.jmx", "polling-result-20.jtl", "polling-report-20")
+                        }
+                        if (continuePolling) {
+                            continuePolling = runLoadStage(this, "polling", 50, 10, 40, "jmeter\\page_polling_load.jmx", "polling-result-50.jtl", "polling-report-50")
+                        }
+                        if (continuePolling) {
+                            continuePolling = runLoadStage(this, "polling", 100, 20, 40, "jmeter\\page_polling_load.jmx", "polling-result-100.jtl", "polling-report-100")
+                        }
+                        if (continuePolling) {
+                            continuePolling = runLoadStage(this, "polling", 150, 30, 40, "jmeter\\page_polling_load.jmx", "polling-result-150.jtl", "polling-report-150")
+                        }
+                        if (continuePolling) {
+                            continuePolling = runLoadStage(this, "polling", 200, 40, 40, "jmeter\\page_polling_load.jmx", "polling-result-200.jtl", "polling-report-200")
+                        }
+                        if (continuePolling) {
+                            continuePolling = runLoadStage(this, "polling", 300, 60, 40, "jmeter\\page_polling_load.jmx", "polling-result-300.jtl", "polling-report-300")
+                        }
 
-        stage('Run JMeter - Status Load 80') {
-            steps {
-                dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    "%JMETER_HOME%\\bin\\jmeter.bat" -n -t jmeter\\status_load.jmx -Jthreads=80 -Jramp=20 -Jloops=30 -l status-result-80.jtl -e -o status-report-80
-                    '''
-                }
-            }
-        }
-
-        stage('Run JMeter - Status Load 100') {
-            steps {
-                dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    "%JMETER_HOME%\\bin\\jmeter.bat" -n -t jmeter\\status_load.jmx -Jthreads=100 -Jramp=25 -Jloops=30 -l status-result-100.jtl -e -o status-report-100
-                    '''
-                }
-            }
-        }
-
-        stage('Run JMeter - Polling Load 10') {
-            steps {
-                dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    "%JMETER_HOME%\\bin\\jmeter.bat" -n -t jmeter\\page_polling_load.jmx -Jthreads=10 -Jramp=5 -Jloops=30 -l polling-result-10.jtl -e -o polling-report-10
-                    '''
-                }
-            }
-        }
-
-        stage('Run JMeter - Polling Load 30') {
-            steps {
-                dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    "%JMETER_HOME%\\bin\\jmeter.bat" -n -t jmeter\\page_polling_load.jmx -Jthreads=30 -Jramp=10 -Jloops=30 -l polling-result-30.jtl -e -o polling-report-30
-                    '''
-                }
-            }
-        }
-
-        stage('Run JMeter - Polling Load 50') {
-            steps {
-                dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    "%JMETER_HOME%\\bin\\jmeter.bat" -n -t jmeter\\page_polling_load.jmx -Jthreads=50 -Jramp=15 -Jloops=30 -l polling-result-50.jtl -e -o polling-report-50
-                    '''
-                }
-            }
-        }
-
-        stage('Run JMeter - Polling Load 80') {
-            steps {
-                dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    "%JMETER_HOME%\\bin\\jmeter.bat" -n -t jmeter\\page_polling_load.jmx -Jthreads=80 -Jramp=20 -Jloops=30 -l polling-result-80.jtl -e -o polling-report-80
-                    '''
-                }
-            }
-        }
-
-        stage('Run JMeter - Polling Load 100') {
-            steps {
-                dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    "%JMETER_HOME%\\bin\\jmeter.bat" -n -t jmeter\\page_polling_load.jmx -Jthreads=100 -Jramp=25 -Jloops=30 -l polling-result-100.jtl -e -o polling-report-100
-                    '''
+                        if (!continuePolling) {
+                            echo 'Polling load ladder stopped by breaker.'
+                        }
+                    }
                 }
             }
         }
@@ -359,6 +408,8 @@ pipeline {
         always {
             dir("${env.PROJECT_DIR}") {
                 script {
+                    stopMonitor()
+
                     if (fileExists(env.BACKEND_PID_FILE)) {
                         bat '''
                         for /f %%i in (%BACKEND_PID_FILE%) do taskkill /PID %%i /T /F >nul 2>nul
@@ -379,10 +430,12 @@ pipeline {
                 archiveArtifacts artifacts: 'logs/app.log', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'logs/error.log', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'allure-results/**', fingerprint: true, allowEmptyArchive: true
-                archiveArtifacts artifacts: '*.jtl', fingerprint: true, allowEmptyArchive: true
-                archiveArtifacts artifacts: '*-report/**', fingerprint: true, allowEmptyArchive: true
+                archiveArtifacts artifacts: 'health-report/**', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'status-report-*/**', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'polling-report-*/**', fingerprint: true, allowEmptyArchive: true
+                archiveArtifacts artifacts: '*-result-*.jtl', fingerprint: true, allowEmptyArchive: true
+                archiveArtifacts artifacts: 'health-result.jtl', fingerprint: true, allowEmptyArchive: true
+                archiveArtifacts artifacts: 'monitoring/**', fingerprint: true, allowEmptyArchive: true
 
                 allure([
                     includeProperties: false,
@@ -395,9 +448,11 @@ pipeline {
                 if exist "%ENV_BACKUP_FILE%" ren "%ENV_BACKUP_FILE%" "%ENV_FILE%"
 
                 if exist %BACKEND_PID_FILE% del /f /q %BACKEND_PID_FILE%
+                if exist %MONITOR_PID_FILE% del /f /q %MONITOR_PID_FILE%
                 if exist %START_PS1% del /f /q %START_PS1%
                 if exist %SMOKE_PS1% del /f /q %SMOKE_PS1%
                 if exist %KILL_PS1% del /f /q %KILL_PS1%
+                if exist %MONITOR_PS1% del /f /q %MONITOR_PS1%
                 '''
             }
         }
@@ -407,7 +462,7 @@ pipeline {
         }
 
         failure {
-            echo 'Pipeline failed. Check console output, logs/app.log and logs/error.log.'
+            echo 'Pipeline failed. Check console output, logs/app.log, logs/error.log and monitoring artifacts.'
         }
     }
 }
