@@ -1,20 +1,25 @@
+from __future__ import annotations
+
 import json
+
 import redis
+
+from tests.utils.env_loader import get_env
 
 
 class RedisHelper:
     def __init__(
         self,
-        host: str = "127.0.0.1",
-        port: int = 6379,
-        db: int = 1,
-        password: str = "",
+        host: str | None = None,
+        port: int | None = None,
+        db: int | None = None,
+        password: str | None = None,
     ):
         self.client = redis.Redis(
-            host=host,
-            port=port,
-            db=db,
-            password=password if password else None,
+            host=host or get_env("REDIS_HOST", "127.0.0.1"),
+            port=int(port or get_env("REDIS_PORT", "6379")),
+            db=int(db or get_env("REDIS_DB", "1")),
+            password=password if password is not None else (get_env("REDIS_PASSWORD", "") or None),
             decode_responses=True,
         )
 

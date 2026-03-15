@@ -1,22 +1,26 @@
+from __future__ import annotations
+
 import pymysql
 from pymysql.cursors import DictCursor
+
+from tests.utils.env_loader import get_env
 
 
 class MySQLHelper:
     def __init__(
         self,
-        host: str = "127.0.0.1",
-        port: int = 3306,
-        user: str = "root",
-        password: str = "AGhappy888@",
-        database: str = "occupancy_system_test",
+        host: str | None = None,
+        port: int | None = None,
+        user: str | None = None,
+        password: str | None = None,
+        database: str | None = None,
     ):
         self.conn_params = {
-            "host": host,
-            "port": port,
-            "user": user,
-            "password": password,
-            "database": database,
+            "host": host or get_env("MYSQL_HOST", "127.0.0.1"),
+            "port": int(port or get_env("MYSQL_PORT", "3306")),
+            "user": user or get_env("MYSQL_USER", "root"),
+            "password": password if password is not None else get_env("MYSQL_PASSWORD", "AGhappy888@"),
+            "database": database or get_env("MYSQL_DB", get_env("MYSQL_DATABASE", "occupancy_system_test")),
             "charset": "utf8mb4",
             "cursorclass": DictCursor,
         }

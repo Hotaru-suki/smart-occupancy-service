@@ -20,3 +20,10 @@ class APIClient:
             timeout=self.timeout,
             **kwargs
         )
+
+    def options(self, path: str, **kwargs):
+        return self.session.options(
+            f"{self.base_url}{path}",
+            timeout=self.timeout,
+            **kwargs
+        )

@@ -9,9 +9,6 @@ __pycache__/
 venv/
 env/
 
-#测试结构
-allure-results
-
 # 日志
 logs/
 *.log
@@ -31,3 +28,9 @@ logs/
 
 # 数据文件
 *.sqlite3
+
+# Test / report artifacts
+allure-results/
+allure-report/
+*-report/
+*.jtl

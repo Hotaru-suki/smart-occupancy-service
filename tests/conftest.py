@@ -1,13 +1,17 @@
+from __future__ import annotations
+
 import pytest
 import requests
 import allure
 
 from tests.utils.api_client import APIClient
+from tests.utils.env_loader import get_env
 from tests.utils.mysql_helper import MySQLHelper
 from tests.utils.redis_helper import RedisHelper
+from tests.utils.reporting import attach_json, attach_text
 
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = get_env("BASE_URL", "http://127.0.0.1:8000")
 
 
 def _safe_get_json(path: str):
@@ -48,29 +52,52 @@ def env_info(client):
 
 @pytest.fixture(scope="session", autouse=True)
 def precheck_service(client):
-    """
-    测试会话开始前先确认服务是通的
-    """
     with allure.step("预检查：确认被测服务可访问"):
         resp = client.get("/")
+        attach_text("precheck_url", f"{BASE_URL}/")
+        attach_text("precheck_status_code", str(resp.status_code))
+        try:
+            attach_json("precheck_response", resp.json())
+        except Exception:
+            attach_text("precheck_response_text", resp.text)
         assert resp.status_code == 200, "被测服务未启动或不可访问"
 
 
 @pytest.fixture(autouse=True)
 def clean_test_redis(redis_helper):
-    """
-    每条用例执行前清理测试 Redis 中的关键 key，提升可控性。
-    如果你不想每条都清，可以删掉 autouse=True 改成按需使用。
-    """
-    redis_helper.delete_key("occupancy:test_status")
+    test_keys = [
+        "occupancy:test_status",
+        "occupancy:test_events",
+    ]
+    for key in test_keys:
+        redis_helper.delete_key(key)
     yield
-    redis_helper.delete_key("occupancy:test_status")
+    for key in test_keys:
+        redis_helper.delete_key(key)
+
+
+@pytest.fixture
+def attach_response():
+    def _attach_response(resp, name: str = "response"):
+        attach_text(f"{name}_status_code", str(resp.status_code))
+        try:
+            attach_json(f"{name}_json", resp.json())
+        except Exception:
+            attach_text(f"{name}_text", resp.text)
+    return _attach_response
+
+
+@pytest.fixture
+def attach_kv():
+    def _attach_kv(name: str, data):
+        if isinstance(data, (dict, list)):
+            attach_json(name, data)
+        else:
+            attach_text(name, str(data))
+    return _attach_kv
 
 
 def pytest_runtest_setup(item):
-    """
-    根据 mark 和当前环境自动跳过不适用的测试
-    """
     env = _safe_get_json("/api/status")
     if env is None:
         return
