@@ -46,7 +46,7 @@ def collect_system_metrics():
         "system_memory_total_mb": bytes_to_mb(vm.total),
         "disk_percent": disk.percent,
         "disk_used_gb": round(disk.used / 1024 / 1024 / 1024, 2),
-        "disk_total_gb": round(disk.total / 1024 / 1024 / 1024 / 1024, 2),
+        "disk_total_gb": round(disk.total / 1024 / 1024 / 1024, 2),
     }
 
 
@@ -137,10 +137,12 @@ def main():
     parser.add_argument("--output", type=str, required=True)
     parser.add_argument("--label", type=str, default="default")
     parser.add_argument("--summary-output", type=str, default="")
+    parser.add_argument("--stop-flag", type=str, default="monitor.stop")
 
     args = parser.parse_args()
 
     ensure_parent_dir(args.output)
+    ensure_parent_dir(args.stop_flag)
 
     headers = [
         "timestamp",
@@ -161,6 +163,9 @@ def main():
 
     samples = []
 
+    if os.path.exists(args.stop_flag):
+        os.remove(args.stop_flag)
+
     psutil.cpu_percent(interval=None)
     for proc in find_processes_by_keyword(args.keyword):
         try:
@@ -168,51 +173,39 @@ def main():
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
 
-    print(f"[INFO] Start monitoring label={args.label}, keyword={args.keyword}, output={args.output}")
-
     start_time = time.time()
 
     with open(args.output, mode="w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=headers)
         writer.writeheader()
 
-        try:
-            while True:
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        while True:
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                system_metrics = collect_system_metrics()
-                processes = find_processes_by_keyword(args.keyword)
-                process_metrics = collect_process_metrics(processes)
+            system_metrics = collect_system_metrics()
+            processes = find_processes_by_keyword(args.keyword)
+            process_metrics = collect_process_metrics(processes)
 
-                row = {
-                    "timestamp": now,
-                    "label": args.label,
-                    **system_metrics,
-                    **process_metrics,
-                }
+            row = {
+                "timestamp": now,
+                "label": args.label,
+                **system_metrics,
+                **process_metrics,
+            }
 
-                samples.append(row)
-                writer.writerow(row)
-                f.flush()
+            samples.append(row)
+            writer.writerow(row)
+            f.flush()
 
-                print(
-                    f"[{now}] [{args.label}] "
-                    f"SYS_CPU={row['system_cpu_percent']}% | "
-                    f"PROC_CPU={row['process_cpu_percent']}% | "
-                    f"PROC_MEM={row['process_memory_rss_mb']}MB | "
-                    f"THREADS={row['process_threads']}"
-                )
+            if os.path.exists(args.stop_flag):
+                break
 
-                if 0 < args.duration <= (time.time() - start_time):
-                    break
+            if args.duration > 0 and (time.time() - start_time) >= args.duration:
+                break
 
-                time.sleep(args.interval)
-
-        except KeyboardInterrupt:
-            pass
+            time.sleep(args.interval)
 
     append_summary(args.summary_output, args.label, samples)
-    print(f"[INFO] Monitoring finished: {args.label}")
 
 
 if __name__ == "__main__":
