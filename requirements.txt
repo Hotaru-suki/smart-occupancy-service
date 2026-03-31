@@ -13,3 +13,4 @@ pytest
 requests
 allure-pytest
 psutil
+allure-python-commons
