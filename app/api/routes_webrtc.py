@@ -1,16 +1,20 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from aiortc import RTCPeerConnection, RTCSessionDescription
 
 from app.schemas import WebRTCOffer, WebRTCAnswer
 from app.runtime.video_track import CounterVideoTrack
 from app.infrastructure.logging.json_logger import logger
+from app.security.auth import AuthenticatedUser, require_authenticated_user
 
 
 def create_webrtc_router(counter, pcs: set):
     router = APIRouter()
 
     @router.post("/webrtc-offer", response_model=WebRTCAnswer)
-    async def webrtc_offer(offer: WebRTCOffer):
+    async def webrtc_offer(
+        offer: WebRTCOffer,
+        _: AuthenticatedUser = Depends(require_authenticated_user),
+    ):
         if not counter.supports_video():
             logger.error(
                 "当前模式不支持视频流，拒绝 WebRTC 建连",

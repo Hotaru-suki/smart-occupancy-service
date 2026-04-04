@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.infrastructure.db import Base, engine
@@ -14,6 +15,10 @@ from app.api.routes_status import create_status_router
 from app.api.routes_events import create_events_router
 from app.api.routes_webrtc import create_webrtc_router
 from app.api.routes_history import create_history_router
+from app.api.routes_auth import create_auth_router
+from app.api.routes_admin import create_admin_router
+from app.api.routes_realtime import create_realtime_router
+from app.services.auth_service import auth_service
 
 import app.infrastructure.models
 
@@ -67,6 +72,7 @@ def build_counter(region_id: int):
 
 
 Base.metadata.create_all(bind=engine)
+auth_service.bootstrap_admin()
 default_region = ensure_default_region()
 
 counter = build_counter(default_region.id)
@@ -117,6 +123,10 @@ app.include_router(create_status_router(counter), prefix="/api", tags=["status"]
 app.include_router(create_events_router(counter), prefix="/api", tags=["events"])
 app.include_router(create_webrtc_router(counter, pcs), prefix="/api", tags=["webrtc"])
 app.include_router(create_history_router(), prefix="/api", tags=["history"])
+app.include_router(create_auth_router(), prefix="/api", tags=["auth"])
+app.include_router(create_admin_router(counter, default_region.id), prefix="/api", tags=["admin"])
+app.include_router(create_realtime_router(counter), prefix="/api", tags=["realtime"])
+app.mount("/ui", StaticFiles(directory="frontend", html=True), name="frontend")
 
 
 @app.get("/")
@@ -125,5 +135,6 @@ def root():
         "service": settings.app_name,
         "version": settings.app_version,
         "mock": counter.mock,
-        "supports_video": counter.supports_video()
+        "supports_video": counter.supports_video(),
+        "ui": "/ui/",
     }

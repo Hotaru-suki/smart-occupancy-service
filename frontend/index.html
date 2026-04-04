@@ -3,102 +3,185 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>区域占用检测面板</title>
+  <title>区域占用检测控制台</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div class="header">
-    <h1>区域占用检测前端面板</h1>
-    <div class="backend" id="backendInfo">后端地址：未连接</div>
-  </div>
+  <div class="toast" id="toast" hidden></div>
 
-  <div class="container">
-    <div class="panel">
-      <div class="panel-title">实时视频</div>
-      <div class="panel-body">
-        <div class="toolbar">
-          <button id="connectBtn">连接后端</button>
-          <button id="refreshBtn">刷新状态</button>
+  <main class="app-shell">
+    <section class="auth-stage" id="authStage">
+      <div class="auth-wrap">
+        <div class="auth-brand">
+          <span class="auth-brand__mark">OD</span>
+          <div class="auth-brand__text">
+            <strong>Occupancy Detection</strong>
+            <span>监控接入与权限控制平台</span>
+          </div>
         </div>
 
-        <div class="video-wrapper">
-          <video id="video" autoplay playsinline muted></video>
-          <div class="video-placeholder" id="videoPlaceholder">
-            当前尚未建立视频连接
+        <div class="auth-card">
+          <div class="auth-card__header">
+            <p class="auth-card__eyebrow" id="authEyebrow">账号登录</p>
+            <h1 class="auth-card__title" id="authTitle">登录系统</h1>
+            <p class="auth-card__debug" id="backendInfo" hidden>后端地址：未连接</p>
           </div>
-        </div>
-      </div>
-    </div>
 
-    <div class="panel">
-      <div class="panel-title">实时状态</div>
-      <div class="panel-body">
-        <div class="status-grid">
-          <div class="card">
-            <div class="card-label">运行模式</div>
-            <div class="card-value" id="mock">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">是否支持视频</div>
-            <div class="card-value" id="supports_video">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">当前状态</div>
-            <div class="card-value" id="status">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">区域是否有人</div>
-            <div class="card-value" id="occupied">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">当前人数</div>
-            <div class="card-value" id="current_people">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">占用时长（秒）</div>
-            <div class="card-value" id="occupied_duration_sec">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">今日累计占用（秒）</div>
-            <div class="card-value" id="today_total_occupied_sec">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">今日最大人数</div>
-            <div class="card-value" id="max_people_today">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">摄像头状态</div>
-            <div class="card-value" id="camera_ok">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">检测器状态</div>
-            <div class="card-value" id="detector_ok">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">服务状态</div>
-            <div class="card-value" id="running">-</div>
-          </div>
-          <div class="card">
-            <div class="card-label">最近帧时间</div>
-            <div class="card-value" id="last_frame_time" style="font-size:15px;">-</div>
-          </div>
-          <div class="card" style="grid-column: 1 / -1;">
-            <div class="card-label">最后错误</div>
-            <div class="card-value" id="last_error" style="font-size:15px;">-</div>
-          </div>
+          <form class="auth-form" id="loginForm" novalidate>
+            <div class="field-group">
+              <label class="field-label" for="loginUsername">用户名</label>
+              <input class="field-input" id="loginUsername" type="text" autocomplete="username" required />
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="loginPassword">密码</label>
+              <input class="field-input" id="loginPassword" type="password" autocomplete="current-password" required />
+            </div>
+            <div class="action-row">
+              <button class="primary-button" type="submit">登录</button>
+              <button class="secondary-button" id="openRegisterButton" type="button">注册</button>
+            </div>
+          </form>
+
+          <form class="auth-form" id="registerForm" hidden novalidate>
+            <div class="segmented-control segmented-control--compact">
+              <button class="segmented-control__item is-active" id="viewerRoleButton" data-role="viewer" type="button">注册普通用户</button>
+              <button class="segmented-control__item" id="adminRoleButton" data-role="admin" type="button">注册管理员</button>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="registerUsername">用户名</label>
+              <input class="field-input" id="registerUsername" type="text" autocomplete="username" required />
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="registerPassword">密码</label>
+              <input class="field-input" id="registerPassword" type="password" autocomplete="new-password" required />
+            </div>
+            <div class="field-group" id="adminRegistrationCodeGroup" hidden>
+              <label class="field-label" for="adminRegistrationCode">管理员注册码</label>
+              <input class="field-input" id="adminRegistrationCode" type="password" autocomplete="one-time-code" />
+            </div>
+            <div class="action-row">
+              <button class="primary-button" type="submit">提交注册</button>
+              <button class="secondary-button" id="backToLoginButton" type="button">返回登录</button>
+            </div>
+          </form>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="panel" style="grid-column: 1 / -1;">
-      <div class="panel-title">最近事件</div>
-      <div class="panel-body">
-        <div class="list" id="eventsList">
-          <div class="muted">暂无事件</div>
+    <section class="dashboard" id="dashboard" hidden>
+      <header class="dashboard-header">
+        <div>
+          <h2 class="dashboard-header__title">监控工作台</h2>
+          <p class="dashboard-header__meta" id="sessionInfo">未登录</p>
         </div>
+        <div class="dashboard-header__actions">
+          <button class="primary-button primary-button--small" id="connectButton" type="button">接入视频</button>
+          <button class="secondary-button secondary-button--small" id="logoutButton" type="button">退出</button>
+        </div>
+      </header>
+
+      <section class="overview-strip">
+        <article class="overview-card">
+          <span class="overview-card__label">当前账户</span>
+          <strong class="overview-card__value" id="sessionRole">-</strong>
+        </article>
+        <article class="overview-card">
+          <span class="overview-card__label">实时链路</span>
+          <strong class="overview-card__value" id="realtimeState">未连接</strong>
+        </article>
+        <article class="overview-card">
+          <span class="overview-card__label">访问级别</span>
+          <strong class="overview-card__value" id="accessScope">-</strong>
+        </article>
+      </section>
+
+      <div class="dashboard-grid">
+        <article class="panel panel--video">
+          <header class="panel__header">视频接入</header>
+          <div class="panel__body">
+            <div class="video-frame">
+              <video id="video" autoplay playsinline muted></video>
+              <div class="video-frame__placeholder" id="videoPlaceholder">等待视频接入</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <header class="panel__header">占用概览</header>
+          <div class="panel__body">
+            <div class="status-grid">
+              <div class="status-card"><span class="status-card__label">运行模式</span><strong class="status-card__value" id="mock">-</strong></div>
+              <div class="status-card"><span class="status-card__label">视频能力</span><strong class="status-card__value" id="supports_video">-</strong></div>
+              <div class="status-card"><span class="status-card__label">当前状态</span><strong class="status-card__value" id="status">-</strong></div>
+              <div class="status-card"><span class="status-card__label">区域是否有人</span><strong class="status-card__value" id="occupied">-</strong></div>
+              <div class="status-card"><span class="status-card__label">当前人数</span><strong class="status-card__value" id="current_people">-</strong></div>
+              <div class="status-card"><span class="status-card__label">占用时长（秒）</span><strong class="status-card__value" id="occupied_duration_sec">-</strong></div>
+              <div class="status-card"><span class="status-card__label">今日累计占用（秒）</span><strong class="status-card__value" id="today_total_occupied_sec">-</strong></div>
+              <div class="status-card"><span class="status-card__label">今日最大人数</span><strong class="status-card__value" id="max_people_today">-</strong></div>
+              <div class="status-card"><span class="status-card__label">摄像头状态</span><strong class="status-card__value" id="camera_ok">-</strong></div>
+              <div class="status-card"><span class="status-card__label">检测器状态</span><strong class="status-card__value" id="detector_ok">-</strong></div>
+              <div class="status-card"><span class="status-card__label">服务状态</span><strong class="status-card__value" id="running">-</strong></div>
+              <div class="status-card"><span class="status-card__label">最近帧时间</span><strong class="status-card__value status-card__value--compact" id="last_frame_time">-</strong></div>
+              <div class="status-card status-card--wide"><span class="status-card__label">最后错误</span><strong class="status-card__value status-card__value--compact" id="last_error">-</strong></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel panel--wide" id="eventsPanel" hidden>
+          <header class="panel__header">事件审计</header>
+          <div class="panel__body">
+            <div class="list-stack" id="eventsList">
+              <div class="empty-text">暂无事件</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel" id="accountPanel">
+          <header class="panel__header">账号安全</header>
+          <div class="panel__body">
+            <form class="security-form" id="passwordForm">
+              <div class="field-group">
+                <label class="field-label" for="currentPassword">当前密码</label>
+                <input class="field-input" id="currentPassword" type="password" autocomplete="current-password" required />
+              </div>
+              <div class="field-group">
+                <label class="field-label" for="newPassword">新密码</label>
+                <input class="field-input" id="newPassword" type="password" autocomplete="new-password" required />
+              </div>
+              <button class="primary-button" type="submit">修改密码</button>
+            </form>
+          </div>
+        </article>
+
+        <article class="panel panel--wide" id="adminPanel" hidden>
+          <header class="panel__header">系统管理</header>
+          <div class="panel__body admin-grid">
+            <section class="admin-section">
+              <h3 class="admin-section__title">ROI 配置</h3>
+              <form class="admin-form" id="roiForm">
+                <div class="field-group"><label class="field-label" for="roiX1">X1</label><input class="field-input" id="roiX1" type="number" required /></div>
+                <div class="field-group"><label class="field-label" for="roiY1">Y1</label><input class="field-input" id="roiY1" type="number" required /></div>
+                <div class="field-group"><label class="field-label" for="roiX2">X2</label><input class="field-input" id="roiX2" type="number" required /></div>
+                <div class="field-group"><label class="field-label" for="roiY2">Y2</label><input class="field-input" id="roiY2" type="number" required /></div>
+                <button class="primary-button" type="submit">更新 ROI</button>
+              </form>
+            </section>
+
+            <section class="admin-section">
+              <h3 class="admin-section__title">用户管理</h3>
+              <div class="admin-section__actions">
+                <button class="secondary-button secondary-button--small" id="cleanupTestUsersButton" type="button">清理测试账号</button>
+              </div>
+              <div class="list-stack" id="userList">
+                <div class="empty-text">暂无用户数据</div>
+              </div>
+            </section>
+          </div>
+        </article>
       </div>
-    </div>
-  </div>
+    </section>
+  </main>
 
   <script src="./app.js"></script>
 </body>

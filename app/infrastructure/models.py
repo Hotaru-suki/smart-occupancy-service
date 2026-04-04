@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, String, Date, DateTime, Float, ForeignKey,
+    Column, Integer, String, Date, DateTime, Float, ForeignKey, Boolean,
     func, Index
 )
 from sqlalchemy.orm import relationship
@@ -49,4 +49,16 @@ class DailyStat(Base):
     stat_date = Column(Date, nullable=False, unique=True, index=True)
     max_people = Column(Integer, nullable=False, default=0)
     total_occupied_sec = Column(Float, nullable=False, default=0.0)
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class AppUser(Base):
+    __tablename__ = "app_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(64), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    role = Column(String(32), nullable=False, default="viewer")
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())

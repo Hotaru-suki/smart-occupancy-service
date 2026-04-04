@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    insecure_placeholder: str = "__CHANGE_ME__"
     app_name: str = "Occupancy Detection Service"
     app_version: str = "1.2.0"
 
@@ -27,7 +28,27 @@ class Settings(BaseSettings):
 
     mock_interval: float = 1.0
 
-    cors_allow_origins: list[str] = ["*"]
+    cors_allow_origins: list[str] = [
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+    ]
+
+    auth_username: str = "admin"
+    auth_password: str = "__CHANGE_ME__"
+    auth_password_hash: str | None = None
+    admin_registration_code: str = "__CHANGE_ME__"
+    auth_cookie_name: str = "occupancy_session"
+    auth_cookie_secure: bool = False
+    auth_cookie_samesite: str = "lax"
+    auth_session_ttl_sec: int = 8 * 60 * 60
+    auth_rate_limit_window_sec: int = 10 * 60
+    auth_rate_limit_max_attempts: int = 8
+    auth_rate_limit_lock_sec: int = 2 * 60
+
+    realtime_push_interval: float = 1.0
+    stat_sync_interval_sec: float = 5.0
 
     mysql_host: str = "127.0.0.1"
     mysql_port: int = 3306

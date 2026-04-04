@@ -29,7 +29,7 @@ def runLoadStage(scriptCtx, scenarioName, threads, ramp, loops, duration, jmxFil
         runPs(scriptCtx, 'scripts\\ci\\ensure_clean_report_dir.ps1', "-ReportDir \"${reportDir}\"")
 
         scriptCtx.bat """
-        "${scriptCtx.env.JMETER_HOME}\\bin\\jmeter.bat" -n -t ${jmxFile} -Jthreads=${threads} -Jramp=${ramp} -Jloops=${loops} -Jduration=${duration} -Jstartup_delay=0 -l ${resultFile} -e -o ${reportDir}
+        "${scriptCtx.env.JMETER_HOME}\\bin\\jmeter.bat" -n -t ${jmxFile} -Jthreads=${threads} -Jramp=${ramp} -Jloops=${loops} -Jduration=${duration} -Jstartup_delay=0 -Jauth_user=${scriptCtx.env.AUTH_USERNAME} -Jauth_password=${scriptCtx.env.AUTH_PASSWORD} -l ${resultFile} -e -o ${reportDir}
         """
     } finally {
         stopMonitor(scriptCtx)
@@ -111,6 +111,7 @@ pipeline {
         BACKEND_PID_FILE            = 'backend.pid'
         MONITOR_PID_FILE            = 'monitor.pid'
         MONITOR_STOP_FLAG           = 'monitor.stop'
+        BASE_URL                    = 'http://127.0.0.1:8000'
 
         MONITOR_KEYWORD             = 'uvicorn'
         MONITOR_SUMMARY             = 'monitoring\\monitor_summary.csv'
@@ -124,6 +125,8 @@ pipeline {
         RESOURCE_MAX_PROCESS_CPU    = '160'
         RESOURCE_MAX_PROCESS_MEM_MB = '2048'
         RESOURCE_MAX_THREADS        = '2000'
+        AUTH_USERNAME               = 'admin'
+        AUTH_PASSWORD               = 'ChangeMe123!'
 
         PYTHONIOENCODING            = 'utf-8'
     }
@@ -141,7 +144,8 @@ pipeline {
                     if not exist "docker-compose.yml" exit /b 1
                     if not exist "jmeter\\health_baseline.jmx" exit /b 1
                     if not exist "jmeter\\status_load.jmx" exit /b 1
-                    if not exist "jmeter\\page_polling_load.jmx" exit /b 1
+                    if not exist "jmeter\\events_load.jmx" exit /b 1
+                    if not exist "jmeter\\dashboard_mix_load.jmx" exit /b 1
                     if not exist "scripts\\monitor_resources.py" exit /b 1
                     if not exist "scripts\\check_jmeter_breaker.py" exit /b 1
                     if not exist "scripts\\check_resource_breaker.py" exit /b 1
@@ -152,6 +156,7 @@ pipeline {
                     if not exist "scripts\\ci\\start_monitor.ps1" exit /b 1
                     if not exist "scripts\\ci\\stop_monitor.ps1" exit /b 1
                     if not exist "scripts\\ci\\ensure_clean_report_dir.ps1" exit /b 1
+                    if not exist "scripts\\ci\\check_realtime_smoke.py" exit /b 1
                     if not exist "%JMETER_HOME%\\bin\\jmeter.bat" exit /b 1
 
                     docker info >nul 2>nul
@@ -230,8 +235,18 @@ pipeline {
             steps {
                 dir("${env.PROJECT_DIR}") {
                     script {
-                        runPs(this, 'scripts\\ci\\smoke_check.ps1', "-Url \"http://127.0.0.1:8000/\"")
+                        runPs(this, 'scripts\\ci\\smoke_check.ps1', "-Url \"${env.BASE_URL}/\"")
                     }
+                }
+            }
+        }
+
+        stage('Realtime Smoke Check') {
+            steps {
+                dir("${env.PROJECT_DIR}") {
+                    bat '''
+                    "%PYTHON_EXE%" scripts\\ci\\check_realtime_smoke.py --base-url "%BASE_URL%" --username "%AUTH_USERNAME%" --password "%AUTH_PASSWORD%"
+                    '''
                 }
             }
         }
@@ -272,20 +287,33 @@ pipeline {
             }
         }
 
-        stage('Run Polling Load Ladder') {
+        stage('Run Events Load Ladder') {
             steps {
                 dir("${env.PROJECT_DIR}") {
                     script {
                         def plans = [
-                            [threads: 100,  ramp: 5, loops: 999999, duration: 120],
-                            [threads: 300,  ramp: 5, loops: 999999, duration: 120],
-                            [threads: 500,  ramp: 5, loops: 999999, duration: 120],
-                            [threads: 800,  ramp: 5, loops: 999999, duration: 120],
-                            [threads: 1000, ramp: 5, loops: 999999, duration: 120],
-                            [threads: 1300, ramp: 5, loops: 999999, duration: 120],
-                            [threads: 1500, ramp: 5, loops: 999999, duration: 120]
+                            [threads: 20,  ramp: 5,  loops: 40, duration: 60],
+                            [threads: 50,  ramp: 10, loops: 40, duration: 60],
+                            [threads: 100, ramp: 15, loops: 40, duration: 60],
+                            [threads: 200, ramp: 20, loops: 40, duration: 60]
                         ]
-                        runScenarioLadder(this, "polling", "jmeter\\page_polling_load.jmx", plans)
+                        runScenarioLadder(this, "events", "jmeter\\events_load.jmx", plans)
+                    }
+                }
+            }
+        }
+
+        stage('Run Dashboard Mixed Load Ladder') {
+            steps {
+                dir("${env.PROJECT_DIR}") {
+                    script {
+                        def plans = [
+                            [threads: 100, ramp: 5, loops: 999999, duration: 120],
+                            [threads: 300, ramp: 5, loops: 999999, duration: 120],
+                            [threads: 500, ramp: 5, loops: 999999, duration: 120],
+                            [threads: 800, ramp: 5, loops: 999999, duration: 120]
+                        ]
+                        runScenarioLadder(this, "dashboard", "jmeter\\dashboard_mix_load.jmx", plans)
                     }
                 }
             }
@@ -303,6 +331,8 @@ pipeline {
                 archiveArtifacts artifacts: 'allure-results/**', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'health-report/**', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'status-report-*/**', fingerprint: true, allowEmptyArchive: true
+                archiveArtifacts artifacts: 'events-report-*/**', fingerprint: true, allowEmptyArchive: true
+                archiveArtifacts artifacts: 'dashboard-report-*/**', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'polling-report-*/**', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: '*-result-*.jtl', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'monitoring/**', fingerprint: true, allowEmptyArchive: true

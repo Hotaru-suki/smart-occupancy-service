@@ -3,6 +3,7 @@ import json
 import time
 from datetime import datetime, date
 
+from app.config import settings
 from app.state import BaseCounter
 from app.infrastructure.cache import redis_client
 from app.infrastructure.logging.json_logger import logger
@@ -40,6 +41,7 @@ class MockPeopleCounter(BaseCounter):
         self.events = []
         self.current_day = str(date.today())
         self._status_snapshot = {}
+        self._last_stat_sync_at = 0.0
 
         self.timeline = [
             (5, 0),
@@ -82,11 +84,15 @@ class MockPeopleCounter(BaseCounter):
         event_service.publish_occupancy_event(self.region_id, event_type, people_count)
 
     def _sync_daily_stat_to_mysql(self):
+        now = time.time()
+        if now - self._last_stat_sync_at < settings.stat_sync_interval_sec:
+            return
         try:
             self.stat_repository.upsert_today(
                 max_people=self.max_people_today,
                 total_occupied_sec=self.today_total_occupied_sec
             )
+            self._last_stat_sync_at = now
         except Exception as e:
             self.last_error = f"MySQL每日统计同步失败: {e}"
             logger.exception(
@@ -269,3 +275,8 @@ class MockPeopleCounter(BaseCounter):
 
     def get_latest_frame(self):
         return None
+
+    def update_roi(self, roi: tuple[int, int, int, int]):
+        with self.lock:
+            self.roi = roi
+            self._refresh_status_snapshot()

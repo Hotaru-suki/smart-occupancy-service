@@ -29,3 +29,7 @@ class BaseCounter(ABC):
     @abstractmethod
     def supports_video(self) -> bool:
         pass
+
+    @abstractmethod
+    def update_roi(self, roi: tuple[int, int, int, int]):
+        pass

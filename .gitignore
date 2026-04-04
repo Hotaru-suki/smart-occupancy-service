@@ -1,5 +1,6 @@
 # Python 缓存
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
 *.pyd
@@ -20,6 +21,9 @@ logs/
 # 临时文件
 *.tmp
 *.swp
+*.bak
+*.pid
+*.stop
 
 # 配置文件
 .env
@@ -33,7 +37,12 @@ logs/
 monitoring/
 allure-results/
 allure-report/
+health-report/
 polling-report-*/
 status-report-*/
+events-report-*/
+dashboard-report-*/
 *-report/
 *.jtl
+jmeter.log
+.codex/

@@ -27,3 +27,31 @@ class RegionRepository:
             return region
         finally:
             db.close()
+
+    def get_by_id(self, region_id: int):
+        db = SessionLocal()
+        try:
+            return db.query(MonitorRegion).filter(MonitorRegion.id == region_id).first()
+        finally:
+            db.close()
+
+    def update_roi(self, region_id: int, roi: tuple[int, int, int, int]):
+        db = SessionLocal()
+        try:
+            region = (
+                db.query(MonitorRegion)
+                .filter(MonitorRegion.id == region_id)
+                .with_for_update()
+                .first()
+            )
+            if region is None:
+                return None
+            region.roi_x1 = roi[0]
+            region.roi_y1 = roi[1]
+            region.roi_x2 = roi[2]
+            region.roi_y2 = roi[3]
+            db.commit()
+            db.refresh(region)
+            return region
+        finally:
+            db.close()

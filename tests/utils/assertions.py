@@ -26,3 +26,9 @@ def assert_event_item_schema(item: dict):
     assert isinstance(item["event"], str)
     assert isinstance(item["people_count"], int)
     assert item["people_count"] >= 0
+
+
+def assert_no_redirect(response):
+    assert response.status_code < 300 or response.status_code >= 400
+    normalized_headers = {key.lower(): value for key, value in response.headers.items()}
+    assert "location" not in normalized_headers

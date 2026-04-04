@@ -1,205 +1,170 @@
-# 智能识别系统（测试版）
+# 区域占用检测系统
 
-> 基于 FastAPI 的智能区域占用检测后端测试工程，聚焦自动化测试、性能验证与 Jenkins CI 集成。
+> 基于 FastAPI 的区域占用检测与实时监控系统，覆盖后端开发、前端演示、认证鉴权、实时通信、自动化测试与持续集成。
 
----
+## 项目定位
 
-## 目录
+这个项目不是单纯的“测试工程样板”，也不是只做算法演示的 demo。它更接近一个完整的中小型业务系统原型，目标是把以下几件事放在同一个仓库里做好：
 
-- [项目简介](#项目简介)
-- [核心能力](#核心能力)
-- [技术栈](#技术栈)
-- [项目结构](#项目结构)
-- [测试设计重点](#测试设计重点)
-- [项目亮点](#项目亮点)
-- [可扩展方向](#可扩展方向)
+- 面向业务的后端能力：区域占用状态、事件记录、历史查询、管理员配置
+- 面向演示的前端能力：登录注册、角色分离、实时状态、视频接入、管理员工作台
+- 面向工程的保障能力：认证授权、Redis/MySQL 一致性、自动化测试、压测、CI
 
----
-
-## 项目简介
-
-本项目主要用于模拟和验证“**检测指定区域范围内是否有人**”这一业务场景。  
-系统通过视频流与目标检测能力，对指定 **ROI（Region of Interest，感兴趣区域）** 内是否有人进行判断，并输出当前人数、占用状态、事件记录等信息，供前端页面进行真实展示。
-
-本项目的重点放在**测试工程化建设**上，围绕该系统搭建了一套包含 **pytest、Allure、JMeter、Jenkins、资源监控与熔断判定** 的相对完整测试链路，用于验证接口可用性、返回结构正确性、缓存与数据库一致性，以及系统在不同压力场景下的性能退化拐点。
-
-后端识别逻辑并不是简单地“检测到人就算占用”，而是加入了以下机制：
-
-- **ROI 区域设置**：只关注指定监控区域内的目标，减少无关区域干扰，更贴近真实业务场景
-- **连续帧识别防抖机制**：通过连续帧判定占用状态，降低单帧误检、偶发抖动对结果的影响，提高状态稳定性
-
-同时，项目提供 **mock 模式**，可在不依赖真实摄像头、模型推理结果和复杂运行环境的情况下，稳定输出可预测的状态数据与事件数据，这一设计显著提升了自动化测试效率，也为 Jenkins 中的稳定回归提供了基础。
-
-本项目测试工作的核心定位是：
-
-> **以智能识别后端服务为被测对象，搭建自动化测试与 CI 集成为主要亮点的测试工程框架**
-
----
+核心业务场景是：系统持续判断指定 ROI 区域内是否有人，并输出当前人数、占用状态、占用时长、进入/离开事件，供前端实时展示和后台查询。
 
 ## 核心能力
 
-当前后端主要提供以下接口能力：
+### 业务能力
 
-- `/`：服务根接口，返回服务名、版本、运行模式信息
-- `/api/health`：健康检查接口
-- `/api/status`：实时状态接口
-- `/api/events`：最近事件接口
-- `/api/history/events`：历史事件查询接口
-- `/api/webrtc-offer`：WebRTC 视频流协商接口
+- 支持真实模式与 Mock 模式两套运行路径
+- 支持 ROI 区域配置与后台更新
+- 支持占用状态、人数、占用时长、日统计输出
+- 支持进入/离开事件记录、最近事件查询、历史事件查询
+- 支持 WebRTC 视频接入
 
-系统可用于支持以下场景：
+### 平台能力
 
-- 检测指定 ROI 区域内是否有人
-- 统计区域当前人数、占用状态、占用时长等信息
-- 记录进入 / 离开区域事件
-- 提供状态查询、历史查询、健康检查等接口
-- 支持用户高并发访问前端网页实时查看项目演示
+- 登录、注册、会话管理、密码修改
+- `viewer / admin` 两级权限控制
+- WebSocket 实时状态推送
+- Redis 缓存与 MySQL 持久化
+- 管理员用户管理：改角色、删用户、批量清理测试账号
 
-因此，自动化测试重点覆盖了根接口、健康检查、状态接口、事件接口，以及 Redis / MySQL 一致性验证。
+### 工程能力
 
----
+- `pytest + Allure` 自动化测试
+- JMeter 压测场景
+- Jenkins Pipeline
+- WebSocket 实时烟测
+- Redis / MySQL 一致性验证
+- 参数化异常测试、错误请求方法测试、并发写读测试
 
 ## 技术栈
 
-### 后端与识别能力
+### 后端
+
 - Python
 - FastAPI
 - Pydantic
 - SQLAlchemy
-- OpenCV
-- YOLOv8 / Ultralytics
-- aiortc（WebRTC）
-
-### 数据与环境
-- MySQL
 - Redis
-- Docker Compose
+- MySQL
 
-### 测试与质量保障
+### 识别与实时能力
+
+- OpenCV
+- Ultralytics YOLOv8
+- aiortc
+- WebSocket
+
+### 前端
+
+- 原生 HTML / CSS / JavaScript
+
+### 测试与 CI
+
 - pytest
 - Allure
 - Apache JMeter
-- Jenkins Pipeline
-- psutil（资源监控）
-
----
+- Jenkins
 
 ## 项目结构
 
 ```text
-app/                  FastAPI 后端服务代码
-├─ api/               路由层：health、status、events、history、webrtc 等接口
-├─ core/              核心能力：ROI 检测、视频帧缓冲等
-├─ infrastructure/    数据库、缓存、日志、队列、仓储层
-├─ runtime/           实时识别逻辑 / mock 运行逻辑
+app/
+├─ api/               路由层
+├─ core/              ROI、视频帧缓冲等基础能力
+├─ infrastructure/    数据库、缓存、日志、队列、仓储
+├─ runtime/           真实计数器 / Mock 计数器
+├─ security/          认证、会话、密码处理
 ├─ services/          业务服务层
-├─ main.py            服务入口
-├─ schemas.py         接口数据模型
-└─ config.py          配置项
+├─ config.py          配置
+├─ main.py            应用入口
+└─ schemas.py         请求响应模型
 
-tests/                pytest 自动化测试脚本
-jmeter/               JMeter 压测场景
-scripts/              监控、熔断、CI 辅助脚本
-allure-results/       pytest 原始结果
-allure-report/        Allure HTML 报告
-monitoring/           资源监控与熔断结果
-health-report/        baseline 压测报告
-status-report-*/      status 场景压测报告
-polling-report-*/     polling 场景压测报告
+frontend/             同源前端页面
+tests/                自动化测试
+jmeter/               压测场景
+scripts/              脚本工具
+docs/                 关键文档
 ```
 
----
+## 关键文档
 
-## 测试设计重点
+- [系统架构说明](./docs/ARCHITECTURE.md)
+- [API 说明](./docs/API_REFERENCE.md)
+- [版本演进说明](./docs/CHANGELOG.md)
+- [认证与注册规则](./docs/AUTH_RULES.md)
+- [测试用例设计](./docs/TEST_CASES.md)
+- [测试报告说明](./docs/TEST_REPORT.md)
 
-本项目以搭建自动化测试框架为主要目标，针对真实项目检测人像的现实复杂性，设计了模拟进入/离开区域的Mock模式，并通过.env设置该模式开/关切换，保证Jenkins CI的稳定性。
+## 当前接口概览
 
-### 1. 自动化测试
+### 公开接口
 
-使用 **pytest + Allure** 搭建接口自动化测试，重点覆盖：
+- `GET /`
+- `GET /api/health`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/session`
+- `GET /ui/`
 
-- 接口可用性验证
-- 返回结构校验
-- 参数边界校验
-- Redis 缓存一致性校验
-- MySQL 数据一致性校验
-- mock 模式下的稳定回归验证
+### 登录后接口
 
-当前共实现 **31 条自动化用例，全部通过**。
+- `GET /api/status`
+- `POST /api/webrtc-offer`
+- `PATCH /api/auth/password`
+- `POST /api/auth/logout`
+- `WS /api/realtime`
 
-测试目录采用分层组织：
+### 管理员接口
 
-- `tests/test_cases/`：按测试主题拆分用例
-- `tests/conftest.py`：公共 fixture、环境预检查、自动清理逻辑
-- `tests/utils/`：请求封装、断言、环境读取、MySQL/Redis 访问、Allure 附件封装
+- `GET /api/events`
+- `GET /api/history/events`
+- `GET /api/admin/users`
+- `PATCH /api/admin/users/{username}/role`
+- `DELETE /api/admin/users/{username}`
+- `DELETE /api/admin/users`
+- `GET /api/admin/regions/default`
+- `PUT /api/admin/regions/default/roi`
 
-自动化测试的关键实现点包括：
+## 快速启动
 
-- 使用 `APIClient` 封装公共请求行为，减少重复代码
-- 使用 `conftest.py` 实现服务可用性预检查和 Redis 测试 key 自动清理
-- 使用统一断言工具保证字段检查口径一致
-- 使用 `MySQLHelper` / `RedisHelper` 做接口结果与底层存储一致性验证
-- 使用 Allure 附件记录响应体、关键变量和中间结果，便于失败定位
-- 通过 mock 模式提升测试可重复性，使自动化用例更适合在 CI 中稳定执行
+### 1. 启动依赖
 
-### 2. 性能测试
+```bash
+docker compose up -d
+```
 
-使用 **JMeter** 对核心接口进行分层压测，覆盖：
+### 2. 配置环境变量
 
-- health 基线场景
-- status 状态查询场景
-- events 查询场景
-- 页面轮询场景（模拟真实用户前端页面访问）
+复制 `.env.example` 并按实际环境修改 `.env`。  
+本地默认示例配置和认证规则已经写在 `.env.example` 注释中。
 
-并结合以下指标识别系统性能退化区间：
+### 3. 启动服务
 
-- 平均响应时间
-- P95
-- 错误率
-- CPU / 内存 / 线程资源占用
+```bash
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
 
-项目的性能测试重点不只是“接口能撑多少并发”，而是通过接口指标与资源指标的联合观察，识别系统在不同负载下的稳定性变化与性能拐点。
+### 4. 打开前端
 
-### 3. 持续集成
+```text
+http://127.0.0.1:8000/ui/
+```
 
-通过 **Jenkins Pipeline** 集成：
+## 开发与测试并重的展示点
 
-1. 环境预检查
-2. 服务启动与健康检查
-3. pytest 执行与 Allure 报告归档
-4. JMeter baseline 与阶梯压测执行
-5. 资源监控与熔断结果归档
+这个项目目前更适合这样理解：
 
-其中 **mock 模式** 对 CI 的价值非常明显：
+- 从开发视角看，它已经具备典型业务系统的基础骨架：鉴权、权限、配置管理、实时通信、前后端联动
+- 从测试视角看，它又覆盖了接口自动化、异常输入、并发、缓存一致性、压测与 CI
 
-- 降低对真实摄像头、视频流和模型推理环境的依赖
-- 提升自动化测试执行效率
-- 增强 Jenkins 中重复执行的稳定性
-- 便于隔离接口层问题与真实识别链路问题
+也就是说，这个仓库的价值不只是“我写了测试”，而是“我把一个可运行的业务原型和一套可验证的质量体系放在了一起”。
 
-也正因为引入了 mock 模式，项目才能更稳定地建立“本地可回归、CI 可重复、结果可分析”的自动化测试流程。
+## 后续可继续增强的方向
 
----
-
-## 项目亮点
-
-- 围绕“检测区域内是否有人”的真实场景构建，可与智能家居联动
-- 后端结果可配合前端网页进行真实展示，具备完整演示价值
-- 支持 **ROI 区域限定**，更贴近实际识别判断场景
-- 引入 **连续帧识别防抖机制**，提升状态判断稳定性
-- 设计 **mock 模式**，提高测试效率并支撑稳定 CI
-- 将 **pytest、Allure、JMeter、Jenkins** 串成完整测试链路
-- 不只验证 HTTP 返回，还验证 **Redis / MySQL** 数据一致性
-- 通过模拟真实用户访问行为进行压测与资源监控识别系统性能拐点
-
-
----
-
-## 可扩展方向
-
-- 对数据库索引优化、缓存击穿/穿透/雪崩等更偏架构稳定性的专项测试
-- 当前 pytest+requests 体系仍偏单项目自动化框架，通用化程度还有提升空间
-- 可以针对后端服务系统进行版本管理，引入提前预检自动更新相关配置资源机制
-- 针对真实人像识别业务的测试较少，后续可以考虑引入有效方法覆盖这一测试场景
-
----
+- 增加正式的 OpenAPI 补充文档和示例请求体
+- 把前端管理台继续拆成更清晰的模块
+- 补 WebSocket / WebRTC 端到端运行验证
+- 继续细化缓存故障、数据库故障、回源压力专项测试
