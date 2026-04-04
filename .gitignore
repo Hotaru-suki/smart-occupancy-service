@@ -45,4 +45,4 @@ dashboard-report-*/
 *-report/
 *.jtl
 jmeter.log
-.codex/
+.codex
