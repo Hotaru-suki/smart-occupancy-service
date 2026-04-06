@@ -256,6 +256,7 @@ pipeline {
                     if not exist "scripts\\ci\\start_monitor.ps1" exit /b 1
                     if not exist "scripts\\ci\\stop_monitor.ps1" exit /b 1
                     if not exist "scripts\\ci\\ensure_clean_report_dir.ps1" exit /b 1
+                    if not exist "scripts\\ci\\wait_for_port.ps1" exit /b 1
                     if not exist "scripts\\ci\\check_realtime_smoke.py" exit /b 1
 
                     docker info >nul 2>nul
@@ -344,6 +345,10 @@ pipeline {
             steps {
                 dir("${env.PROJECT_DIR}") {
                     bat 'docker compose up -d'
+                    script {
+                        runPs(this, 'scripts\\ci\\wait_for_port.ps1', "-Host \"${params.REDIS_HOST}\" -Port ${params.REDIS_PORT} -MaxRetry 30 -SleepSeconds 2")
+                        runPs(this, 'scripts\\ci\\wait_for_port.ps1', "-Host \"${params.MYSQL_HOST}\" -Port ${params.MYSQL_PORT} -MaxRetry 30 -SleepSeconds 2")
+                    }
                 }
             }
         }
