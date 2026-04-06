@@ -171,6 +171,25 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
+    parameters {
+        string(name: 'HOST', defaultValue: '127.0.0.1', description: '服务监听地址')
+        string(name: 'PORT', defaultValue: '8000', description: '服务监听端口')
+        string(name: 'AUTH_USERNAME', defaultValue: 'admin', description: '管理员用户名')
+        password(name: 'AUTH_PASSWORD', defaultValue: '', description: '管理员密码')
+        password(name: 'ADMIN_REGISTRATION_CODE', defaultValue: '', description: '管理员注册码')
+        string(name: 'PYTHON_EXE', defaultValue: '', description: 'Python 解释器绝对路径')
+        string(name: 'JMETER_HOME', defaultValue: '', description: 'JMeter 根目录绝对路径')
+        string(name: 'MYSQL_HOST', defaultValue: '127.0.0.1', description: 'MySQL 主机')
+        string(name: 'MYSQL_PORT', defaultValue: '3307', description: 'MySQL 端口')
+        string(name: 'MYSQL_USER', defaultValue: 'root', description: 'MySQL 用户')
+        password(name: 'MYSQL_PASSWORD', defaultValue: '', description: 'MySQL 密码')
+        string(name: 'MYSQL_DB', defaultValue: 'test_db', description: 'MySQL 数据库名')
+        string(name: 'REDIS_HOST', defaultValue: '127.0.0.1', description: 'Redis 主机')
+        string(name: 'REDIS_PORT', defaultValue: '6379', description: 'Redis 端口')
+        string(name: 'REDIS_DB', defaultValue: '1', description: 'Redis 数据库编号')
+        password(name: 'REDIS_PASSWORD', defaultValue: '', description: 'Redis 密码')
+    }
+
     environment {
         ALLURE_RESULTS              = 'allure-results'
 
@@ -259,23 +278,23 @@ pipeline {
                     }
 
                     def resolvedEnv = [
-                        HOST: env.HOST ?: templateEnv.HOST ?: '',
-                        PORT: env.PORT ?: templateEnv.PORT ?: '',
-                        PYTHON_EXE: env.PYTHON_EXE ?: templateEnv.PYTHON_EXE ?: '',
-                        JMETER_HOME: env.JMETER_HOME ?: templateEnv.JMETER_HOME ?: '',
-                        AUTH_USERNAME: env.AUTH_USERNAME ?: templateEnv.AUTH_USERNAME ?: '',
-                        AUTH_PASSWORD: env.AUTH_PASSWORD ?: templateEnv.AUTH_PASSWORD ?: '',
+                        HOST: params.HOST ?: templateEnv.HOST ?: '',
+                        PORT: params.PORT ?: templateEnv.PORT ?: '',
+                        PYTHON_EXE: params.PYTHON_EXE ?: templateEnv.PYTHON_EXE ?: '',
+                        JMETER_HOME: params.JMETER_HOME ?: templateEnv.JMETER_HOME ?: '',
+                        AUTH_USERNAME: params.AUTH_USERNAME ?: templateEnv.AUTH_USERNAME ?: '',
+                        AUTH_PASSWORD: params.AUTH_PASSWORD ?: templateEnv.AUTH_PASSWORD ?: '',
                         AUTH_PASSWORD_HASH: env.AUTH_PASSWORD_HASH ?: templateEnv.AUTH_PASSWORD_HASH ?: '',
-                        ADMIN_REGISTRATION_CODE: env.ADMIN_REGISTRATION_CODE ?: templateEnv.ADMIN_REGISTRATION_CODE ?: '',
-                        MYSQL_HOST: env.MYSQL_HOST ?: templateEnv.MYSQL_HOST ?: '',
-                        MYSQL_PORT: env.MYSQL_PORT ?: templateEnv.MYSQL_PORT ?: '',
-                        MYSQL_USER: env.MYSQL_USER ?: templateEnv.MYSQL_USER ?: '',
-                        MYSQL_PASSWORD: env.MYSQL_PASSWORD ?: templateEnv.MYSQL_PASSWORD ?: '',
-                        MYSQL_DB: env.MYSQL_DB ?: templateEnv.MYSQL_DB ?: '',
-                        REDIS_HOST: env.REDIS_HOST ?: templateEnv.REDIS_HOST ?: '',
-                        REDIS_PORT: env.REDIS_PORT ?: templateEnv.REDIS_PORT ?: '',
-                        REDIS_DB: env.REDIS_DB ?: templateEnv.REDIS_DB ?: '',
-                        REDIS_PASSWORD: env.REDIS_PASSWORD ?: templateEnv.REDIS_PASSWORD ?: '',
+                        ADMIN_REGISTRATION_CODE: params.ADMIN_REGISTRATION_CODE ?: templateEnv.ADMIN_REGISTRATION_CODE ?: '',
+                        MYSQL_HOST: params.MYSQL_HOST ?: templateEnv.MYSQL_HOST ?: '',
+                        MYSQL_PORT: params.MYSQL_PORT ?: templateEnv.MYSQL_PORT ?: '',
+                        MYSQL_USER: params.MYSQL_USER ?: templateEnv.MYSQL_USER ?: '',
+                        MYSQL_PASSWORD: params.MYSQL_PASSWORD ?: templateEnv.MYSQL_PASSWORD ?: '',
+                        MYSQL_DB: params.MYSQL_DB ?: templateEnv.MYSQL_DB ?: '',
+                        REDIS_HOST: params.REDIS_HOST ?: templateEnv.REDIS_HOST ?: '',
+                        REDIS_PORT: params.REDIS_PORT ?: templateEnv.REDIS_PORT ?: '',
+                        REDIS_DB: params.REDIS_DB ?: templateEnv.REDIS_DB ?: '',
+                        REDIS_PASSWORD: params.REDIS_PASSWORD ?: templateEnv.REDIS_PASSWORD ?: '',
                     ]
 
                     writeDotEnv(this, templatePath, outputPath, resolvedEnv)
