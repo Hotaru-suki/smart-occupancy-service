@@ -1,13 +1,42 @@
 def runPs(scriptCtx, file, args = '') {
+    def scriptPath = file.replace('/', '\\')
+    if (!(scriptPath.length() > 2 && scriptPath[1] == ':' && scriptPath[2] == '\\') && !scriptPath.startsWith('.\\')) {
+        scriptPath = ".\\${scriptPath}"
+    }
     scriptCtx.bat """
-    powershell -NoProfile -ExecutionPolicy Bypass -File "${file}" ${args}
+    cd /d "${scriptCtx.env.PROJECT_DIR}"
+    if not exist "${scriptPath}" exit /b 1
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "& '${scriptPath}' ${args}"
     """
+}
+
+def runPsStatus(scriptCtx, file, args = '') {
+    def scriptPath = file.replace('/', '\\')
+    if (!(scriptPath.length() > 2 && scriptPath[1] == ':' && scriptPath[2] == '\\') && !scriptPath.startsWith('.\\')) {
+        scriptPath = ".\\${scriptPath}"
+    }
+    return scriptCtx.bat(
+        returnStatus: true,
+        script: """
+        cd /d "${scriptCtx.env.PROJECT_DIR}"
+        if not exist "${scriptPath}" exit /b 1
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "& '${scriptPath}' ${args}"
+        """
+    )
 }
 
 def parseEnvValue(rawValue) {
     def value = rawValue.trim()
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
         return value.substring(1, value.length() - 1)
+    }
+    return value
+}
+
+def formatEnvValue(rawValue) {
+    def value = rawValue == null ? '' : rawValue.toString()
+    if (value.contains(' ') || value.contains('#')) {
+        return "\"${value.replace('"', '\\"')}\""
     }
     return value
 }
@@ -27,6 +56,25 @@ def loadDotEnv(scriptCtx, filePath) {
         values[parts[0].trim()] = parseEnvValue(parts[1])
     }
     return values
+}
+
+def writeDotEnv(scriptCtx, templatePath, outputPath, overrides) {
+    def rendered = scriptCtx.readFile(templatePath).split(/\r?\n/, -1).collect { rawLine ->
+        def trimmed = rawLine.trim()
+        if (!trimmed || trimmed.startsWith('#') || !rawLine.contains('=')) {
+            return rawLine
+        }
+
+        def parts = rawLine.split('=', 2)
+        def key = parts[0].trim()
+        if (!overrides.containsKey(key)) {
+            return rawLine
+        }
+
+        return "${key}=${formatEnvValue(overrides[key])}"
+    }.join('\n')
+
+    scriptCtx.writeFile(file: outputPath, text: "${rendered}\n")
 }
 
 def startMonitor(scriptCtx, label) {
@@ -127,7 +175,7 @@ pipeline {
         ALLURE_RESULTS              = 'allure-results'
 
         ENV_FILE                    = '.env'
-        ENV_TEST_FILE               = '.env.test'
+        ENV_TEMPLATE_FILE           = '.env.test.example'
         ENV_BACKUP_FILE             = '.env.bak'
 
         BACKEND_PID_FILE            = 'backend.pid'
@@ -149,6 +197,12 @@ pipeline {
     }
 
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Resolve Env') {
             steps {
                 script {
@@ -163,7 +217,7 @@ pipeline {
                     bat '''
                     if not exist "requirements.txt" exit /b 1
                     if not exist "requirements-dev.txt" exit /b 1
-                    if not exist "%ENV_TEST_FILE%" exit /b 1
+                    if not exist "%ENV_TEMPLATE_FILE%" exit /b 1
                     if not exist "app\\main.py" exit /b 1
                     if not exist "tests" exit /b 1
                     if not exist "docker-compose.yml" exit /b 1
@@ -192,12 +246,39 @@ pipeline {
 
         stage('Prepare Env') {
             steps {
-                dir("${env.PROJECT_DIR}") {
-                    bat '''
-                    if exist "%ENV_BACKUP_FILE%" del /f /q "%ENV_BACKUP_FILE%"
-                    if exist "%ENV_FILE%" copy /Y "%ENV_FILE%" "%ENV_BACKUP_FILE%" >nul
-                    copy /Y "%ENV_TEST_FILE%" "%ENV_FILE%"
-                    '''
+                script {
+                    def templatePath = "${env.PROJECT_DIR}\\${env.ENV_TEMPLATE_FILE}"
+                    def outputPath = "${env.PROJECT_DIR}\\${env.ENV_FILE}"
+                    def templateEnv = loadDotEnv(this, templatePath)
+
+                    if (fileExists(outputPath)) {
+                        bat '''
+                        if exist "%ENV_BACKUP_FILE%" del /f /q "%ENV_BACKUP_FILE%"
+                        copy /Y "%ENV_FILE%" "%ENV_BACKUP_FILE%" >nul
+                        '''
+                    }
+
+                    def resolvedEnv = [
+                        HOST: env.HOST ?: templateEnv.HOST ?: '',
+                        PORT: env.PORT ?: templateEnv.PORT ?: '',
+                        PYTHON_EXE: env.PYTHON_EXE ?: templateEnv.PYTHON_EXE ?: '',
+                        JMETER_HOME: env.JMETER_HOME ?: templateEnv.JMETER_HOME ?: '',
+                        AUTH_USERNAME: env.AUTH_USERNAME ?: templateEnv.AUTH_USERNAME ?: '',
+                        AUTH_PASSWORD: env.AUTH_PASSWORD ?: templateEnv.AUTH_PASSWORD ?: '',
+                        AUTH_PASSWORD_HASH: env.AUTH_PASSWORD_HASH ?: templateEnv.AUTH_PASSWORD_HASH ?: '',
+                        ADMIN_REGISTRATION_CODE: env.ADMIN_REGISTRATION_CODE ?: templateEnv.ADMIN_REGISTRATION_CODE ?: '',
+                        MYSQL_HOST: env.MYSQL_HOST ?: templateEnv.MYSQL_HOST ?: '',
+                        MYSQL_PORT: env.MYSQL_PORT ?: templateEnv.MYSQL_PORT ?: '',
+                        MYSQL_USER: env.MYSQL_USER ?: templateEnv.MYSQL_USER ?: '',
+                        MYSQL_PASSWORD: env.MYSQL_PASSWORD ?: templateEnv.MYSQL_PASSWORD ?: '',
+                        MYSQL_DB: env.MYSQL_DB ?: templateEnv.MYSQL_DB ?: '',
+                        REDIS_HOST: env.REDIS_HOST ?: templateEnv.REDIS_HOST ?: '',
+                        REDIS_PORT: env.REDIS_PORT ?: templateEnv.REDIS_PORT ?: '',
+                        REDIS_DB: env.REDIS_DB ?: templateEnv.REDIS_DB ?: '',
+                        REDIS_PASSWORD: env.REDIS_PASSWORD ?: templateEnv.REDIS_PASSWORD ?: '',
+                    ]
+
+                    writeDotEnv(this, templatePath, outputPath, resolvedEnv)
                 }
             }
         }
@@ -211,6 +292,7 @@ pipeline {
                     env.BASE_URL = "http://${fileEnv.HOST}:${fileEnv.PORT}"
                     env.AUTH_USERNAME = fileEnv.AUTH_USERNAME
                     env.AUTH_PASSWORD = fileEnv.AUTH_PASSWORD
+                    env.ADMIN_REGISTRATION_CODE = fileEnv.ADMIN_REGISTRATION_CODE
                     env.PYTHON_EXE = fileEnv.PYTHON_EXE
                     env.JMETER_HOME = fileEnv.JMETER_HOME
                 }
@@ -223,7 +305,11 @@ pipeline {
                     bat '''
                     if "%BASE_URL%"=="" exit /b 1
                     if "%AUTH_USERNAME%"=="" exit /b 1
+                    if "%AUTH_USERNAME%"=="__CHANGE_ME__" exit /b 1
                     if "%AUTH_PASSWORD%"=="" exit /b 1
+                    if "%AUTH_PASSWORD%"=="__CHANGE_ME__" exit /b 1
+                    if "%ADMIN_REGISTRATION_CODE%"=="" exit /b 1
+                    if "%ADMIN_REGISTRATION_CODE%"=="__CHANGE_ME__" exit /b 1
                     if "%PYTHON_EXE%"=="" exit /b 1
                     if "%JMETER_HOME%"=="" exit /b 1
                     if not exist "%PYTHON_EXE%" exit /b 1
@@ -379,8 +465,15 @@ pipeline {
         always {
             dir("${env.PROJECT_DIR}") {
                 script {
-                    stopMonitor(this)
-                    runPs(this, 'scripts\\ci\\stop_backend.ps1', "-Port 8000 -PidFile \"${env.BACKEND_PID_FILE}\"")
+                    int stopMonitorStatus = runPsStatus(this, 'scripts\\ci\\stop_monitor.ps1', "-PidFile \"${env.MONITOR_PID_FILE}\" -StopFlag \"${env.MONITOR_STOP_FLAG}\" -WaitSeconds 10")
+                    if (stopMonitorStatus != 0) {
+                        echo "Cleanup warning: stop_monitor.ps1 exited with code ${stopMonitorStatus}"
+                    }
+
+                    int stopBackendStatus = runPsStatus(this, 'scripts\\ci\\stop_backend.ps1', "-Port 8000 -PidFile \"${env.BACKEND_PID_FILE}\"")
+                    if (stopBackendStatus != 0) {
+                        echo "Cleanup warning: stop_backend.ps1 exited with code ${stopBackendStatus}"
+                    }
                 }
 
                 archiveArtifacts artifacts: 'allure-results/**', fingerprint: true, allowEmptyArchive: true

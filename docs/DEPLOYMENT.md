@@ -14,14 +14,15 @@
 
 - `.env.example`：模板，占位配置，不写真实本地值
 - `.env.dev`：本地开发使用的真实配置
-- `.env.test`：测试与 Jenkins 使用的真实配置
+- `.env.test`：本地测试使用的真实配置
+- `.env.test.example`：Jenkins / SCM 模式使用的测试模板
 - `.env`：应用运行时实际读取的配置文件
 
 推荐约定：
 
 - 开发时：复制 `.env.dev` 到 `.env`
 - 测试时：复制 `.env.test` 到 `.env`
-- Jenkins 中：流水线自动复制 `.env.test` 到 `.env`
+- Jenkins 中：流水线基于 `.env.test.example` 和 Jenkins 环境变量生成 `.env`
 
 ## 运行依赖
 
@@ -114,23 +115,32 @@ pytest tests --alluredir=allure-results
 Jenkins 的配置链路是：
 
 1. 检查仓库结构和依赖脚本
-2. 复制 `.env.test` 到 `.env`
+2. 基于 `.env.test.example` 和 Jenkins 环境变量生成 `.env`
 3. 从 `.env` 读取运行配置
 4. 启动 Docker 依赖服务
 5. 安装依赖
 6. 启动后端
 7. 执行烟测、实时烟测、pytest、JMeter
 
-Jenkins 当前依赖 `.env` 中这些字段：
+Jenkins 当前需要提供这些关键值，用于生成 `.env`：
 
 - `HOST`
 - `PORT`
 - `AUTH_USERNAME`
 - `AUTH_PASSWORD`
+- `ADMIN_REGISTRATION_CODE`
 - `PYTHON_EXE`
 - `JMETER_HOME`
+- `MYSQL_HOST`
+- `MYSQL_PORT`
+- `MYSQL_USER`
+- `MYSQL_PASSWORD`
+- `MYSQL_DB`
+- `REDIS_HOST`
+- `REDIS_PORT`
+- `REDIS_DB`
 
-也就是说，`.env.test` 中需要提前写好这些真实值，流水线复制后才能正常运行。
+如果这些值没有通过 Jenkins 环境变量提供，就需要在 `.env.test.example` 中改成适合该 Jenkins 节点环境的非占位值。
 
 ## Docker 说明
 
@@ -165,5 +175,6 @@ pytest tests
 
 - 不要把真实本地值写进 `.env.example`
 - `.env.dev` 和 `.env.test` 可以保留当前环境需要的真实配置
-- 如果 Jenkins 跑不起来，先检查 `.env.test` 是否包含 `PYTHON_EXE` 和 `JMETER_HOME`
+- Jenkins 不应依赖仓库内真实 `.env.test`，应通过环境变量生成 `.env`
+- 如果 Jenkins 跑不起来，先检查必填环境变量是否仍是占位值
 - 如果本地依赖升级后出现兼容问题，优先检查 Python 客户端依赖版本，而不是先怀疑 Redis/MySQL 服务端

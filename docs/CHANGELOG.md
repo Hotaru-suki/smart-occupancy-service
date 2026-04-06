@@ -17,7 +17,7 @@
 #### 1. 配置与集成链路统一
 
 - 补齐 `.env.example`、`.env.dev`、`.env.test` 的职责划分
-- Jenkins 流水线改为先复制 `.env.test` 到 `.env`，再统一读取 `.env`
+- Jenkins 流水线改为基于 `.env.test.example` 和环境变量生成 `.env`，再统一读取 `.env`
 - 开发环境、测试环境、CI 环境的配置入口保持一致
 - 依赖文件拆分为 `requirements.txt` 和 `requirements-dev.txt`
 

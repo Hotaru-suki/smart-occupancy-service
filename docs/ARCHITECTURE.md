@@ -84,7 +84,7 @@
 
 1. 开发时复制 `.env.dev` 到 `.env`
 2. 测试时复制 `.env.test` 到 `.env`
-3. Jenkins 中由流水线自动复制 `.env.test` 到 `.env`
+3. Jenkins 中由流水线基于 `.env.test.example` 和环境变量生成 `.env`
 
 ### 3.2 外围集成链路
 

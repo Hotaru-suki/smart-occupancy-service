@@ -19,7 +19,7 @@
 测试执行链路与当前仓库约定一致：
 
 - 本地测试与 Jenkins 都围绕 `.env` 工作
-- Jenkins 运行前会先复制 `.env.test` 到 `.env`
+- Jenkins 运行前会基于 `.env.test.example` 和环境变量生成 `.env`
 - Docker Compose 负责拉起 Redis 与 MySQL 依赖
 
 ## 2. 测试环境

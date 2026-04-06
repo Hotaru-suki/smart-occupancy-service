@@ -57,7 +57,8 @@ docs/                 关键文档
 
 - `.env.example`：模板文件，只描述需要哪些配置，不写真实本地值
 - `.env.dev`：本地开发使用的真实配置
-- `.env.test`：测试与 Jenkins 使用的真实配置
+- `.env.test`：本地测试使用的真实配置
+- `.env.test.example`：Jenkins / SCM 模式使用的测试模板
 - `.env`：应用运行时实际读取的环境文件
 
 推荐使用方式：
@@ -68,7 +69,7 @@ cp .env.dev .env
 
 如果是 Jenkins 流水线：
 
-- 流水线会先复制 `.env.test` 到 `.env`
+- 流水线会基于 `.env.test.example` 和 Jenkins 环境变量生成 `.env`
 - 后续统一从 `.env` 读取运行配置
 
 ## 本地开发启动
@@ -152,7 +153,7 @@ pytest tests --alluredir=allure-results
 
 - 本地开发：`docker compose up -d` + `.env.dev` + `uvicorn`
 - 本地测试：`.env.test` + `pytest`
-- Jenkins 集成：流水线复制 `.env.test` 到 `.env`，然后执行依赖安装、服务启动、烟测、pytest 和 JMeter
+- Jenkins 集成：流水线基于 `.env.test.example` 和 Jenkins 环境变量生成 `.env`，然后执行依赖安装、服务启动、烟测、pytest 和 JMeter
 
 更完整的部署操作说明见：
 
