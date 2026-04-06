@@ -198,6 +198,7 @@ pipeline {
         ENV_BACKUP_FILE             = '.env.bak'
 
         BACKEND_PID_FILE            = 'backend.pid'
+        BACKEND_LOG_FILE            = 'backend.log'
         MONITOR_PID_FILE            = 'monitor.pid'
         MONITOR_STOP_FLAG           = 'monitor.stop'
         MONITOR_KEYWORD             = 'uvicorn'
@@ -385,7 +386,7 @@ pipeline {
             steps {
                 dir("${env.PROJECT_DIR}") {
                     script {
-                        runPs(this, 'scripts\\ci\\start_backend.ps1', "-PythonExe \"${env.PYTHON_EXE}\" -PidFile \"${env.BACKEND_PID_FILE}\"")
+                        runPs(this, 'scripts\\ci\\start_backend.ps1', "-PythonExe \"${env.PYTHON_EXE}\" -PidFile \"${env.BACKEND_PID_FILE}\" -LogFile \"${env.BACKEND_LOG_FILE}\" -StartupWaitSeconds 5")
                     }
                 }
             }
@@ -496,6 +497,7 @@ pipeline {
                 }
 
                 archiveArtifacts artifacts: 'allure-results/**', fingerprint: true, allowEmptyArchive: true
+                archiveArtifacts artifacts: 'backend.log', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'health-report/**', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'status-report-*/**', fingerprint: true, allowEmptyArchive: true
                 archiveArtifacts artifacts: 'events-report-*/**', fingerprint: true, allowEmptyArchive: true
