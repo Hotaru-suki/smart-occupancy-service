@@ -1,6 +1,12 @@
+from __future__ import annotations
+
+from typing import Any, Callable
+
 import allure
 import pytest
+from requests import Response
 
+from tests.utils.api_client import APIClient
 from tests.utils.assertions import assert_bool_field, assert_iso_datetime_like, assert_keys_exist
 
 
@@ -9,7 +15,10 @@ from tests.utils.assertions import assert_bool_field, assert_iso_datetime_like, 
 @pytest.mark.smoke
 @pytest.mark.api
 @pytest.mark.regression
-def test_health_api_status_code(client, attach_response):
+def test_health_api_status_code(
+    client: APIClient,
+    attach_response: Callable[[Response, str], None],
+) -> None:
     with allure.step("请求 /api/health"):
         resp = client.get("/api/health")
         attach_response(resp, "health")
@@ -20,10 +29,13 @@ def test_health_api_status_code(client, attach_response):
 @allure.feature("Health API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_health_api_schema(client, attach_response):
+def test_health_api_schema(
+    client: APIClient,
+    attach_response: Callable[[Response, str], None],
+) -> None:
     with allure.step("校验 /api/health 返回结构"):
         resp = client.get("/api/health")
-        data = resp.json()
+        data: dict[str, Any] = resp.json()
         attach_response(resp, "health")
 
     required_fields = [
@@ -52,10 +64,13 @@ def test_health_api_schema(client, attach_response):
 @allure.feature("Health API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_health_and_status_environment_consistency(client, attach_kv):
+def test_health_and_status_environment_consistency(
+    client: APIClient,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("分别获取 /api/health 与 /api/status"):
-        health_data = client.get("/api/health").json()
-        status_data = client.get("/api/status").json()
+        health_data: dict[str, Any] = client.get("/api/health").json()
+        status_data: dict[str, Any] = client.get("/api/status").json()
         attach_kv("health_data", health_data)
         attach_kv("status_data", status_data)
 

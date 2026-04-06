@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import secrets
 import time
+from typing import Any
 
 from app.config import settings
 from app.infrastructure.cache import redis_client
 
 
 class SessionManager:
-    def __init__(self):
+    def __init__(self) -> None:
         self.cookie_name = settings.auth_cookie_name
         self.session_ttl_sec = settings.auth_session_ttl_sec
         self.fail_window_sec = settings.auth_rate_limit_window_sec
@@ -31,7 +32,7 @@ class SessionManager:
         subject = self._normalize_login_subject(username)
         return f"auth:login_lock:{client_id}:{subject}"
 
-    def create_session(self, username: str, role: str = "viewer") -> dict:
+    def create_session(self, username: str, role: str = "viewer") -> dict[str, Any]:
         token = secrets.token_urlsafe(32)
         now = int(time.time())
         session = {
@@ -48,14 +49,15 @@ class SessionManager:
         )
         return session
 
-    def get_session(self, token: str | None) -> dict | None:
+    def get_session(self, token: str | None) -> dict[str, Any] | None:
         if not token:
             return None
 
         raw = redis_client.get(self._session_key(token))
         if not raw:
             return None
-        return json.loads(raw)
+        session = json.loads(raw)
+        return session if isinstance(session, dict) else None
 
     def destroy_session(self, token: str | None) -> None:
         if token:
@@ -65,7 +67,10 @@ class SessionManager:
         lock_key = self._fail_lock_key(client_id, username)
         lock_ttl = redis_client.ttl(lock_key)
         if lock_ttl and lock_ttl > 0:
-            attempts = int(redis_client.get(self._fail_key(client_id, username)) or self.fail_max_attempts)
+            attempts = int(
+                redis_client.get(self._fail_key(client_id, username))
+                or self.fail_max_attempts
+            )
             return attempts, lock_ttl
 
         key = self._fail_key(client_id, username)

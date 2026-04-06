@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import allure
 import pytest
 
@@ -8,7 +10,7 @@ from tests.utils.assertions import assert_no_redirect
 @allure.feature("UI Shell")
 @pytest.mark.api
 @pytest.mark.regression
-def test_ui_shell_renders_login_first(fresh_client):
+def test_ui_shell_renders_login_first(fresh_client) -> None:
     response = fresh_client.get("/ui/", allow_redirects=False)
     assert response.status_code == 200
     assert_no_redirect(response)
@@ -25,7 +27,7 @@ def test_ui_shell_renders_login_first(fresh_client):
 @allure.feature("UI Shell")
 @pytest.mark.api
 @pytest.mark.regression
-def test_ui_shell_contains_split_registration_modes(fresh_client):
+def test_ui_shell_contains_split_registration_modes(fresh_client) -> None:
     response = fresh_client.get("/ui/")
     assert response.status_code == 200
 

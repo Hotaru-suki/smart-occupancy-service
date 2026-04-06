@@ -4,6 +4,31 @@ def runPs(scriptCtx, file, args = '') {
     """
 }
 
+def parseEnvValue(rawValue) {
+    def value = rawValue.trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        return value.substring(1, value.length() - 1)
+    }
+    return value
+}
+
+def loadDotEnv(scriptCtx, filePath) {
+    def values = [:]
+    if (!scriptCtx.fileExists(filePath)) {
+        return values
+    }
+
+    scriptCtx.readFile(filePath).split(/\r?\n/).each { rawLine ->
+        def line = rawLine.trim()
+        if (!line || line.startsWith('#') || !line.contains('=')) {
+            return
+        }
+        def parts = line.split('=', 2)
+        values[parts[0].trim()] = parseEnvValue(parts[1])
+    }
+    return values
+}
+
 def startMonitor(scriptCtx, label) {
     runPs(
         scriptCtx,
@@ -99,9 +124,6 @@ pipeline {
     }
 
     environment {
-        PROJECT_DIR                 = 'C:\\Users\\siest\\Desktop\\api'
-        PYTHON_EXE                  = 'C:\\Users\\siest\\Desktop\\api\\.venv\\Scripts\\python.exe'
-        JMETER_HOME                 = 'D:\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3'
         ALLURE_RESULTS              = 'allure-results'
 
         ENV_FILE                    = '.env'
@@ -111,8 +133,6 @@ pipeline {
         BACKEND_PID_FILE            = 'backend.pid'
         MONITOR_PID_FILE            = 'monitor.pid'
         MONITOR_STOP_FLAG           = 'monitor.stop'
-        BASE_URL                    = 'http://127.0.0.1:8000'
-
         MONITOR_KEYWORD             = 'uvicorn'
         MONITOR_SUMMARY             = 'monitoring\\monitor_summary.csv'
         BREAKER_SUMMARY             = 'monitoring\\breaker_summary.csv'
@@ -125,19 +145,24 @@ pipeline {
         RESOURCE_MAX_PROCESS_CPU    = '160'
         RESOURCE_MAX_PROCESS_MEM_MB = '2048'
         RESOURCE_MAX_THREADS        = '2000'
-        AUTH_USERNAME               = 'admin'
-        AUTH_PASSWORD               = 'ChangeMe123!'
-
         PYTHONIOENCODING            = 'utf-8'
     }
 
     stages {
+        stage('Resolve Env') {
+            steps {
+                script {
+                    env.PROJECT_DIR = pwd()
+                }
+            }
+        }
+
         stage('Precheck') {
             steps {
                 dir("${env.PROJECT_DIR}") {
                     bat '''
-                    if not exist "%PYTHON_EXE%" exit /b 1
                     if not exist "requirements.txt" exit /b 1
+                    if not exist "requirements-dev.txt" exit /b 1
                     if not exist "%ENV_TEST_FILE%" exit /b 1
                     if not exist "app\\main.py" exit /b 1
                     if not exist "tests" exit /b 1
@@ -157,7 +182,6 @@ pipeline {
                     if not exist "scripts\\ci\\stop_monitor.ps1" exit /b 1
                     if not exist "scripts\\ci\\ensure_clean_report_dir.ps1" exit /b 1
                     if not exist "scripts\\ci\\check_realtime_smoke.py" exit /b 1
-                    if not exist "%JMETER_HOME%\\bin\\jmeter.bat" exit /b 1
 
                     docker info >nul 2>nul
                     if errorlevel 1 exit /b 1
@@ -178,6 +202,37 @@ pipeline {
             }
         }
 
+        stage('Reload Env') {
+            steps {
+                script {
+                    def envFilePath = "${env.PROJECT_DIR}\\${env.ENV_FILE}"
+                    def fileEnv = loadDotEnv(this, envFilePath)
+
+                    env.BASE_URL = "http://${fileEnv.HOST}:${fileEnv.PORT}"
+                    env.AUTH_USERNAME = fileEnv.AUTH_USERNAME
+                    env.AUTH_PASSWORD = fileEnv.AUTH_PASSWORD
+                    env.PYTHON_EXE = fileEnv.PYTHON_EXE
+                    env.JMETER_HOME = fileEnv.JMETER_HOME
+                }
+            }
+        }
+
+        stage('Validate Runtime Config') {
+            steps {
+                dir("${env.PROJECT_DIR}") {
+                    bat '''
+                    if "%BASE_URL%"=="" exit /b 1
+                    if "%AUTH_USERNAME%"=="" exit /b 1
+                    if "%AUTH_PASSWORD%"=="" exit /b 1
+                    if "%PYTHON_EXE%"=="" exit /b 1
+                    if "%JMETER_HOME%"=="" exit /b 1
+                    if not exist "%PYTHON_EXE%" exit /b 1
+                    if not exist "%JMETER_HOME%\\bin\\jmeter.bat" exit /b 1
+                    '''
+                }
+            }
+        }
+
         stage('Start Docker Services') {
             steps {
                 dir("${env.PROJECT_DIR}") {
@@ -191,7 +246,7 @@ pipeline {
                 dir("${env.PROJECT_DIR}") {
                     bat '''
                     "%PYTHON_EXE%" -m pip install --upgrade pip
-                    "%PYTHON_EXE%" -m pip install -r requirements.txt
+                    "%PYTHON_EXE%" -m pip install -r requirements-dev.txt
                     '''
                 }
             }

@@ -1,30 +1,57 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 import allure
 import pytest
 import requests
+from requests import Response
 
 from tests.utils.api_client import APIClient
+from tests.utils.auth_payloads import (
+    AUTH_PASSWORD,
+    AUTH_USERNAME,
+    login_payload,
+    register_payload,
+)
 from tests.utils.env_loader import get_env
 from tests.utils.mysql_helper import MySQLHelper
 from tests.utils.redis_helper import RedisHelper
 from tests.utils.reporting import attach_json, attach_text
-from tests.utils.auth_payloads import AUTH_PASSWORD, AUTH_USERNAME, login_payload, register_payload
+
 BASE_URL = get_env("BASE_URL", "http://127.0.0.1:8000")
+_HEALTH_ENV_CACHE: dict[str, Any] | None = None
 
 
-def _safe_get_json(path: str):
+def _queue_attachment(request: pytest.FixtureRequest, kind: str, name: str, data: Any) -> None:
+    attachments = getattr(request.node, "_pending_attachments", None)
+    if attachments is None:
+        attachments = []
+        setattr(request.node, "_pending_attachments", attachments)
+    attachments.append((kind, name, data))
+
+
+def _flush_attachments(request: pytest.FixtureRequest) -> None:
+    attachments = getattr(request.node, "_pending_attachments", [])
+    for kind, name, data in attachments:
+        if kind == "json":
+            attach_json(name, data)
+        else:
+            attach_text(name, str(data))
+
+
+def _safe_get_json(path: str) -> dict[str, Any] | None:
     try:
         resp = requests.get(f"{BASE_URL}{path}", timeout=5)
         resp.raise_for_status()
-        return resp.json()
-    except Exception:
+        data = resp.json()
+    except (requests.RequestException, ValueError):
         return None
+    return data if isinstance(data, dict) else None
 
 
-def _login(api_client: APIClient, username: str, password: str, **kwargs):
+def _login(api_client: APIClient, username: str, password: str, **kwargs: Any) -> Response:
     return api_client.post(
         "/api/auth/login",
         json=login_payload(username=username, password=password),
@@ -38,6 +65,11 @@ def anonymous_client():
 
 
 @pytest.fixture(scope="session")
+def shared_fresh_client():
+    return APIClient(base_url=BASE_URL, timeout=5)
+
+
+@pytest.fixture(scope="session")
 def client(anonymous_client):
     login_resp = _login(anonymous_client, AUTH_USERNAME, AUTH_PASSWORD)
     assert login_resp.status_code == 200, "测试登录失败，请检查认证配置"
@@ -45,8 +77,8 @@ def client(anonymous_client):
 
 
 @pytest.fixture
-def fresh_client():
-    return APIClient(base_url=BASE_URL, timeout=5)
+def fresh_client(shared_fresh_client):
+    return shared_fresh_client.reset()
 
 
 @pytest.fixture(scope="session")
@@ -65,20 +97,21 @@ def unique_username():
 
 
 @pytest.fixture
-def registered_user(fresh_client, unique_username):
+def registered_user(client, fresh_client, unique_username):
     password = "ValidPass123!"
     response = fresh_client.post(
         "/api/auth/register",
         json=register_payload(unique_username, password, role="viewer"),
     )
     assert response.status_code in (200, 201)
-    return {"username": unique_username, "password": password, "role": "viewer"}
+    user = {"username": unique_username, "password": password, "role": "viewer"}
+    yield user
+    client.delete(f"/api/admin/users/{unique_username}")
 
 
 @pytest.fixture
-def viewer_client(registered_user):
-    api_client = APIClient(base_url=BASE_URL, timeout=5)
-    response = api_client.post(
+def viewer_client(registered_user, fresh_client):
+    response = fresh_client.post(
         "/api/auth/login",
         json=login_payload(
             username=registered_user["username"],
@@ -86,7 +119,7 @@ def viewer_client(registered_user):
         ),
     )
     assert response.status_code == 200
-    return api_client
+    return fresh_client
 
 
 @pytest.fixture(scope="session")
@@ -109,7 +142,7 @@ def precheck_service():
         attach_text("precheck_status_code", str(resp.status_code))
         try:
             attach_json("precheck_response", resp.json())
-        except Exception:
+        except ValueError:
             attach_text("precheck_response_text", resp.text)
         assert resp.status_code == 200, "被测服务未启动或不可访问"
 
@@ -128,28 +161,55 @@ def clean_test_redis(redis_helper):
 
 
 @pytest.fixture
-def attach_response():
+def deferred_attachments(request: pytest.FixtureRequest):
+    request.node._pending_attachments = []
+    yield
+
+    rep_setup = getattr(request.node, "rep_setup", None)
+    rep_call = getattr(request.node, "rep_call", None)
+    should_attach = bool(
+        (rep_setup is not None and rep_setup.failed)
+        or (rep_call is not None and rep_call.failed)
+    )
+    if should_attach:
+        _flush_attachments(request)
+
+
+@pytest.fixture
+def attach_response(request: pytest.FixtureRequest, deferred_attachments):
     def _attach_response(resp, name: str = "response"):
-        attach_text(f"{name}_status_code", str(resp.status_code))
+        _queue_attachment(request, "text", f"{name}_status_code", str(resp.status_code))
         try:
-            attach_json(f"{name}_json", resp.json())
-        except Exception:
-            attach_text(f"{name}_text", resp.text)
+            _queue_attachment(request, "json", f"{name}_json", resp.json())
+        except ValueError:
+            _queue_attachment(request, "text", f"{name}_text", resp.text)
     return _attach_response
 
 
 @pytest.fixture
-def attach_kv():
+def attach_kv(request: pytest.FixtureRequest, deferred_attachments):
     def _attach_kv(name: str, data):
         if isinstance(data, (dict, list)):
-            attach_json(name, data)
+            _queue_attachment(request, "json", name, data)
         else:
-            attach_text(name, str(data))
+            _queue_attachment(request, "text", name, data)
     return _attach_kv
 
 
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    setattr(item, f"rep_{report.when}", report)
+
+
 def pytest_runtest_setup(item):
-    env = _safe_get_json("/api/health")
+    global _HEALTH_ENV_CACHE
+
+    if _HEALTH_ENV_CACHE is None:
+        _HEALTH_ENV_CACHE = _safe_get_json("/api/health")
+
+    env = _HEALTH_ENV_CACHE
     if env is None:
         return
 

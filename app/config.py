@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     insecure_placeholder: str = "__CHANGE_ME__"
     app_name: str = "Occupancy Detection Service"
-    app_version: str = "1.2.0"
+    app_version: str = "0.7"
 
     host: str = "127.0.0.1"
     port: int = 8000

@@ -14,7 +14,9 @@ def build_cookie_header(session: requests.Session) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Smoke check for authenticated realtime websocket.")
+    parser = argparse.ArgumentParser(
+        description="Smoke check for authenticated realtime websocket."
+    )
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--username", required=True)
     parser.add_argument("--password", required=True)
@@ -71,7 +73,10 @@ def main() -> int:
             last_error = exc
             break
 
-    raise RuntimeError(f"Realtime websocket handshake failed for all candidates. last_error={last_error}")
+    raise RuntimeError(
+        "Realtime websocket handshake failed for all candidates. "
+        f"last_error={last_error}"
+    )
 
 
 if __name__ == "__main__":

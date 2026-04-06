@@ -54,8 +54,15 @@ class AuthService:
     def bootstrap_admin(self) -> None:
         self.ensure_runtime_security()
         username = self.validate_username(settings.auth_username)
-        password_hash = self._resolve_password_hash(settings.auth_password, settings.auth_password_hash)
-        self.user_repository.ensure_user(username=username, password_hash=password_hash, role="admin")
+        password_hash = self._resolve_password_hash(
+            settings.auth_password,
+            settings.auth_password_hash,
+        )
+        self.user_repository.ensure_user(
+            username=username,
+            password_hash=password_hash,
+            role="admin",
+        )
 
     def register_user(
         self,
@@ -173,7 +180,10 @@ class AuthService:
         return hash_password(raw_password)
 
     def ensure_runtime_security(self) -> None:
-        if not settings.auth_password_hash and settings.auth_password == settings.insecure_placeholder:
+        if (
+            not settings.auth_password_hash
+            and settings.auth_password == settings.insecure_placeholder
+        ):
             raise RuntimeError("AUTH_PASSWORD or AUTH_PASSWORD_HASH must be explicitly configured.")
         if settings.admin_registration_code == settings.insecure_placeholder:
             raise RuntimeError("ADMIN_REGISTRATION_CODE must be explicitly configured.")

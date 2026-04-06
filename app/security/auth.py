@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import Depends, HTTPException, Request, WebSocket, status
 
@@ -27,7 +28,7 @@ def get_client_id(request: Request) -> str:
     return "unknown"
 
 
-def get_cookie_settings() -> dict:
+def get_cookie_settings() -> dict[str, Any]:
     return {
         "key": settings.auth_cookie_name,
         "httponly": True,

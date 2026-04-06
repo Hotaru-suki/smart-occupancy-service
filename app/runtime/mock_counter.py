@@ -1,7 +1,8 @@
-import threading
 import json
+import threading
 import time
 from datetime import datetime, date
+from typing import Any
 
 from app.config import settings
 from app.state import BaseCounter
@@ -12,7 +13,13 @@ from app.services.event_service import event_service
 
 
 class MockPeopleCounter(BaseCounter):
-    def __init__(self, roi=None, region_id: int = 1, interval=1.0, mock=True):
+    def __init__(
+        self,
+        roi: tuple[int, int, int, int] | None = None,
+        region_id: int = 1,
+        interval: float = 1.0,
+        mock: bool = True,
+    ) -> None:
         self.roi = roi if roi is not None else (100, 100, 500, 400)
         self.region_id = region_id
         self.interval = interval
@@ -57,25 +64,26 @@ class MockPeopleCounter(BaseCounter):
         self._refresh_status_snapshot()
 
         logger.info(
-            f"MockPeopleCounter 初始化完成: roi={self.roi}, region_id={self.region_id}, interval={self.interval}",
-            extra={"event": "mock_counter_init"}
+            "MockPeopleCounter 初始化完成: "
+            f"roi={self.roi}, region_id={self.region_id}, interval={self.interval}",
+            extra={"event": "mock_counter_init"},
         )
 
-    def _now(self):
+    def _now(self) -> datetime:
         return datetime.now()
 
-    def _now_str(self):
+    def _now_str(self) -> str:
         return self._now().isoformat(timespec="seconds")
 
     def supports_video(self) -> bool:
         return False
 
-    def _append_event(self, event_type, people_count):
+    def _append_event(self, event_type: str, people_count: int) -> None:
         event = {
             "timestamp": self._now_str(),
             "region_id": self.region_id,
             "event": event_type,
-            "people_count": people_count
+            "people_count": people_count,
         }
 
         self.events.append(event)
@@ -83,24 +91,24 @@ class MockPeopleCounter(BaseCounter):
 
         event_service.publish_occupancy_event(self.region_id, event_type, people_count)
 
-    def _sync_daily_stat_to_mysql(self):
+    def _sync_daily_stat_to_mysql(self) -> None:
         now = time.time()
         if now - self._last_stat_sync_at < settings.stat_sync_interval_sec:
             return
         try:
             self.stat_repository.upsert_today(
                 max_people=self.max_people_today,
-                total_occupied_sec=self.today_total_occupied_sec
+                total_occupied_sec=self.today_total_occupied_sec,
             )
             self._last_stat_sync_at = now
-        except Exception as e:
-            self.last_error = f"MySQL每日统计同步失败: {e}"
+        except Exception as exc:
+            self.last_error = f"MySQL每日统计同步失败: {exc}"
             logger.exception(
                 self.last_error,
-                extra={"event": "mock_mysql_daily_stat_sync_failed"}
+                extra={"event": "mock_mysql_daily_stat_sync_failed"},
             )
 
-    def _refresh_status_snapshot(self):
+    def _refresh_status_snapshot(self) -> None:
         occupied_duration_sec = 0.0
         if self.occupied and self.occupied_since is not None:
             occupied_duration_sec = time.time() - self.occupied_since
@@ -120,23 +128,26 @@ class MockPeopleCounter(BaseCounter):
                 "x1": self.roi[0],
                 "y1": self.roi[1],
                 "x2": self.roi[2],
-                "y2": self.roi[3]
+                "y2": self.roi[3],
             },
             "camera_ok": self.camera_ok,
             "detector_ok": self.detector_ok,
             "running": self.running,
             "last_frame_time": self.last_frame_time,
             "last_error": self.last_error,
-            "timestamp": self._now_str()
+            "timestamp": self._now_str(),
         }
 
         try:
-            redis_client.set("occupancy:status", json.dumps(self._status_snapshot, ensure_ascii=False))
-        except Exception as e:
-            self.last_error = f"Redis状态缓存失败: {e}"
+            redis_client.set(
+                "occupancy:status",
+                json.dumps(self._status_snapshot, ensure_ascii=False),
+            )
+        except Exception as exc:
+            self.last_error = f"Redis状态缓存失败: {exc}"
             logger.error(
                 self.last_error,
-                extra={"event": "mock_redis_status_cache_failed"}
+                extra={"event": "mock_redis_status_cache_failed"},
             )
 
     def _reset_daily_if_needed(self):
@@ -149,10 +160,10 @@ class MockPeopleCounter(BaseCounter):
 
             logger.info(
                 f"Mock检测到日期切换，重置当日统计: current_day={self.current_day}",
-                extra={"event": "mock_daily_stat_reset"}
+                extra={"event": "mock_daily_stat_reset"},
             )
 
-    def _set_people(self, people):
+    def _set_people(self, people: int) -> None:
         now_ts = time.time()
         now_str = self._now_str()
 
@@ -172,7 +183,7 @@ class MockPeopleCounter(BaseCounter):
 
                 logger.info(
                     f"Mock区域进入事件触发: region_id={self.region_id}, people_count={people}",
-                    extra={"event": "mock_enter_region"}
+                    extra={"event": "mock_enter_region"},
                 )
         else:
             if old_occupied:
@@ -184,15 +195,15 @@ class MockPeopleCounter(BaseCounter):
 
                 logger.info(
                     f"Mock区域离开事件触发: region_id={self.region_id}",
-                    extra={"event": "mock_leave_region"}
+                    extra={"event": "mock_leave_region"},
                 )
 
-    def _run_mock(self):
+    def _run_mock(self) -> None:
         self.running = True
 
         logger.info(
             "Mock线程启动",
-            extra={"event": "mock_thread_start"}
+            extra={"event": "mock_thread_start"},
         )
 
         while self.running:
@@ -211,10 +222,10 @@ class MockPeopleCounter(BaseCounter):
 
         logger.info(
             "Mock线程退出",
-            extra={"event": "mock_thread_stop"}
+            extra={"event": "mock_thread_stop"},
         )
 
-    def start(self):
+    def start(self) -> None:
         with self.lock:
             if self.running:
                 return
@@ -226,10 +237,10 @@ class MockPeopleCounter(BaseCounter):
 
         logger.info(
             "MockPeopleCounter 启动",
-            extra={"event": "mock_counter_start"}
+            extra={"event": "mock_counter_start"},
         )
 
-    def stop(self):
+    def stop(self) -> None:
         with self.lock:
             self.running = False
 
@@ -241,10 +252,10 @@ class MockPeopleCounter(BaseCounter):
 
         logger.info(
             "MockPeopleCounter 停止",
-            extra={"event": "mock_counter_stop"}
+            extra={"event": "mock_counter_stop"},
         )
 
-    def get_status(self):
+    def get_status(self) -> dict[str, Any]:
         with self.lock:
             snapshot = dict(self._status_snapshot)
 
@@ -256,11 +267,11 @@ class MockPeopleCounter(BaseCounter):
             snapshot["timestamp"] = self._now_str()
             return snapshot
 
-    def get_events(self, limit=20):
+    def get_events(self, limit: int = 20) -> list[dict[str, Any]]:
         with self.lock:
             return list(self.events[-limit:])
 
-    def get_health(self):
+    def get_health(self) -> dict[str, Any]:
         with self.lock:
             return {
                 "mock": self.mock,
@@ -270,7 +281,7 @@ class MockPeopleCounter(BaseCounter):
                 "detector_ok": self.detector_ok,
                 "last_frame_time": self.last_frame_time,
                 "last_error": self.last_error,
-                "timestamp": self._now_str()
+                "timestamp": self._now_str(),
             }
 
     def get_latest_frame(self):

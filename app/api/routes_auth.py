@@ -43,7 +43,11 @@ def _login_failed_response(
 def create_auth_router():
     router = APIRouter()
 
-    @router.post("/auth/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
+    @router.post(
+        "/auth/register",
+        response_model=RegisterResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
     def register(payload: RegisterRequest, request: Request, response: Response):
         ensure_allowed_origin(request.headers.get("origin"))
         result = auth_service.register_user(
@@ -85,7 +89,10 @@ def create_auth_router():
             expected_role=payload.role,
         )
         if identity is None:
-            attempts, retry_after = session_manager.register_login_failure(client_id, payload.username)
+            attempts, retry_after = session_manager.register_login_failure(
+                client_id,
+                payload.username,
+            )
             remaining_attempts = max(session_manager.fail_max_attempts - attempts, 0)
             is_limited = attempts >= session_manager.fail_max_attempts
             logger.warning(
@@ -94,7 +101,11 @@ def create_auth_router():
             )
             return _login_failed_response(
                 response=response,
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS if is_limited else status.HTTP_401_UNAUTHORIZED,
+                status_code=(
+                    status.HTTP_429_TOO_MANY_REQUESTS
+                    if is_limited
+                    else status.HTTP_401_UNAUTHORIZED
+                ),
                 retry_after_sec=retry_after if is_limited else None,
                 remaining_attempts=remaining_attempts,
             )

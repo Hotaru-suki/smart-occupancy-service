@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor
 
 import allure
@@ -12,6 +14,14 @@ from tests.utils.env_loader import get_env
 BASE_URL = get_env("BASE_URL", "http://127.0.0.1:8000")
 AUTH_USERNAME = get_env("AUTH_USERNAME", "admin")
 AUTH_PASSWORD = get_env("AUTH_PASSWORD", "ChangeMe123!")
+
+
+@pytest.fixture
+def restore_default_roi(client):
+    original_region = client.get("/api/admin/regions/default").json()
+    original_roi = original_region["roi"]
+    yield original_roi
+    client.put("/api/admin/regions/default/roi", json=original_roi)
 
 
 @allure.epic("Occupancy System")
@@ -39,7 +49,12 @@ def test_admin_can_list_users(client, attach_kv):
 @allure.feature("Admin API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_admin_can_update_viewer_role_and_viewer_gains_access(client, viewer_client, registered_user, attach_kv):
+def test_admin_can_update_viewer_role_and_viewer_gains_access(
+    client,
+    viewer_client,
+    registered_user,
+    attach_kv,
+):
     username = registered_user["username"]
 
     update_resp = client.patch(
@@ -126,10 +141,14 @@ def test_viewer_can_read_status_but_not_events(viewer_client, attach_response):
 @allure.feature("Admin API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_admin_roi_update_is_serializable_under_concurrent_writes(client, attach_kv):
+def test_admin_roi_update_is_serializable_under_concurrent_writes(
+    client,
+    restore_default_roi,
+    attach_kv,
+):
     payloads = [
-      {"x1": 120, "y1": 120, "x2": 420, "y2": 320},
-      {"x1": 140, "y1": 140, "x2": 460, "y2": 360},
+        {"x1": 120, "y1": 120, "x2": 420, "y2": 320},
+        {"x1": 140, "y1": 140, "x2": 460, "y2": 360},
     ]
 
     def update_roi(payload):
@@ -157,7 +176,12 @@ def test_admin_roi_update_is_serializable_under_concurrent_writes(client, attach
 @allure.feature("Admin API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_admin_write_and_viewer_read_can_run_concurrently(client, viewer_client, attach_kv):
+def test_admin_write_and_viewer_read_can_run_concurrently(
+    client,
+    viewer_client,
+    restore_default_roi,
+    attach_kv,
+):
     roi_payload = {"x1": 130, "y1": 130, "x2": 430, "y2": 330}
 
     def admin_write():
@@ -167,7 +191,10 @@ def test_admin_write_and_viewer_read_can_run_concurrently(client, viewer_client,
         return viewer_client.get("/api/status").status_code
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        write_status, read_status = list(executor.map(lambda fn: fn(), [admin_write, viewer_read]))
+        write_future = executor.submit(admin_write)
+        read_future = executor.submit(viewer_read)
+        write_status = write_future.result()
+        read_status = read_future.result()
 
     attach_kv("admin_write_viewer_read", {"write_status": write_status, "read_status": read_status})
     assert write_status == 200

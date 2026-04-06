@@ -1,10 +1,12 @@
-import csv
-import sys
-import os
 import argparse
+import csv
+import os
+import sys
+from argparse import Namespace
+from typing import Any
 
 
-def parse_args():
+def parse_args() -> Namespace:
     parser = argparse.ArgumentParser(
         description="Check per-run resource CSV and decide whether to trigger breaker."
     )
@@ -69,7 +71,7 @@ def ensure_output_header(path: str) -> None:
             ])
 
 
-def read_rows(resource_file: str) -> list[dict]:
+def read_rows(resource_file: str) -> list[dict[str, str]]:
     if not os.path.exists(resource_file):
         raise FileNotFoundError(f"resource file not found: {resource_file}")
 
@@ -78,31 +80,31 @@ def read_rows(resource_file: str) -> list[dict]:
         return list(reader)
 
 
-def safe_float(row: dict, key: str) -> float:
+def safe_float(row: dict[str, Any], key: str) -> float:
     value = row.get(key, 0)
     if value is None or value == "":
         return 0.0
     return float(value)
 
 
-def safe_int(row: dict, key: str) -> int:
+def safe_int(row: dict[str, Any], key: str) -> int:
     value = row.get(key, 0)
     if value is None or value == "":
         return 0
     return int(float(value))
 
 
-def main():
+def main() -> None:
     args = parse_args()
     ensure_output_header(args.output)
 
     try:
         rows = read_rows(args.resource_file)
-    except FileNotFoundError as e:
-        print(f"[RESOURCE_BREAKER] {e}")
+    except FileNotFoundError as exc:
+        print(f"[RESOURCE_BREAKER] {exc}")
         sys.exit(1)
-    except Exception as e:
-        print(f"[RESOURCE_BREAKER] failed to read resource file: {e}")
+    except OSError as exc:
+        print(f"[RESOURCE_BREAKER] failed to read resource file: {exc}")
         sys.exit(1)
 
     if not rows:
@@ -118,8 +120,8 @@ def main():
             max_process_cpu = max(safe_float(r, "process_cpu_percent") for r in rows)
             max_process_mem = max(safe_float(r, "process_memory_rss_mb") for r in rows)
             max_threads = max(safe_int(r, "process_threads") for r in rows)
-        except Exception as e:
-            print(f"[RESOURCE_BREAKER] failed to parse resource rows: {e}")
+        except (TypeError, ValueError) as exc:
+            print(f"[RESOURCE_BREAKER] failed to parse resource rows: {exc}")
             sys.exit(1)
 
         triggered = False
@@ -155,11 +157,11 @@ def main():
                 "YES" if triggered else "NO",
                 reason,
             ])
-    except PermissionError as e:
-        print(f"[RESOURCE_BREAKER] permission denied when writing output: {e}")
+    except PermissionError as exc:
+        print(f"[RESOURCE_BREAKER] permission denied when writing output: {exc}")
         sys.exit(1)
-    except Exception as e:
-        print(f"[RESOURCE_BREAKER] failed to write output: {e}")
+    except OSError as exc:
+        print(f"[RESOURCE_BREAKER] failed to write output: {exc}")
         sys.exit(1)
 
     print(f"[RESOURCE_BREAKER] label={args.label}")

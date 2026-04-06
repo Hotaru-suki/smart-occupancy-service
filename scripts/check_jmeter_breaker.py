@@ -1,20 +1,35 @@
-import csv
-import sys
 import argparse
+import csv
+import os
+import sys
+from argparse import Namespace
+from typing import Sequence
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Check JMeter JTL and decide whether to trigger breaker.")
+def parse_args() -> Namespace:
+    parser = argparse.ArgumentParser(
+        description="Check JMeter JTL and decide whether to trigger breaker."
+    )
     parser.add_argument("--jtl", required=True, help="Path to JTL file")
     parser.add_argument("--label", required=True, help="Scenario label")
     parser.add_argument("--summary", required=True, help="Path to breaker summary csv")
-    parser.add_argument("--max-error-rate", type=float, default=5.0, help="Percent, default 5")
-    parser.add_argument("--max-p95-ms", type=float, default=2000.0, help="Milliseconds, default 2000")
+    parser.add_argument(
+        "--max-error-rate",
+        type=float,
+        default=5.0,
+        help="Percent, default 5",
+    )
+    parser.add_argument(
+        "--max-p95-ms",
+        type=float,
+        default=2000.0,
+        help="Milliseconds, default 2000",
+    )
     parser.add_argument("--min-samples", type=int, default=20, help="Minimum samples required")
     return parser.parse_args()
 
 
-def percentile(sorted_values, p):
+def percentile(sorted_values: Sequence[float], p: float) -> float:
     if not sorted_values:
         return 0.0
     if len(sorted_values) == 1:
@@ -26,8 +41,7 @@ def percentile(sorted_values, p):
     return float(sorted_values[lower]) * (1 - weight) + float(sorted_values[upper]) * weight
 
 
-def ensure_summary_header(path):
-    import os
+def ensure_summary_header(path: str) -> None:
     if not os.path.exists(path):
         parent = os.path.dirname(path)
         if parent and not os.path.exists(parent):
@@ -45,7 +59,7 @@ def ensure_summary_header(path):
             ])
 
 
-def main():
+def main() -> int:
     args = parse_args()
 
     elapsed_values = []
@@ -109,7 +123,10 @@ def main():
         ])
 
     print(f"[BREAKER] label={args.label}")
-    print(f"[BREAKER] samples={total_count}, error_rate={error_rate}%, avg={avg_ms}ms, p95={p95_ms}ms")
+    print(
+        f"[BREAKER] samples={total_count}, error_rate={error_rate}%, "
+        f"avg={avg_ms}ms, p95={p95_ms}ms"
+    )
     print(f"[BREAKER] triggered={'YES' if triggered else 'NO'}, reason={reason}")
 
     sys.exit(2 if triggered else 0)

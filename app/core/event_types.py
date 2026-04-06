@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
@@ -14,19 +16,24 @@ class OccupancyEventMessage:
     timestamp: str
 
     @classmethod
-    def build(cls, region_id: int, event: EventKind, people_count: int):
+    def build(
+        cls,
+        region_id: int,
+        event: EventKind,
+        people_count: int,
+    ) -> OccupancyEventMessage:
         return cls(
             region_id=region_id,
             event=event,
             people_count=people_count,
-            timestamp=datetime.now().isoformat(timespec="seconds")
+            timestamp=datetime.now().isoformat(timespec="seconds"),
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str | int]:
         return {
             "type": "occupancy_event",
             "region_id": self.region_id,
             "event": self.event,
             "people_count": self.people_count,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }

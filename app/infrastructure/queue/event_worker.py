@@ -1,20 +1,23 @@
+from __future__ import annotations
+
 import json
 import threading
 from queue import Empty
+from typing import Any
 
 from app.infrastructure.cache import redis_client
+from app.infrastructure.logging.json_logger import logger
 from app.infrastructure.queue.event_bus import event_queue
 from app.infrastructure.repositories.event_repository import EventRepository
-from app.infrastructure.logging.json_logger import logger
 
 
 class EventWorker:
-    def __init__(self):
+    def __init__(self) -> None:
         self._running = False
-        self._thread = None
+        self._thread: threading.Thread | None = None
         self._event_repo = EventRepository()
 
-    def _handle_event(self, message: dict) -> None:
+    def _handle_event(self, message: dict[str, Any]) -> None:
         if message.get("type") != "occupancy_event":
             return
 
@@ -29,10 +32,10 @@ class EventWorker:
 
         logger.info(
             f"事件异步处理完成: region_id={region_id}, {event_type}, people_count={people_count}",
-            extra={"event": "event_worker_processed"}
+            extra={"event": "event_worker_processed"},
         )
 
-    def _run(self):
+    def _run(self) -> None:
         self._running = True
         logger.info("事件消费者启动", extra={"event": "event_worker_start"})
 
@@ -44,23 +47,23 @@ class EventWorker:
 
             try:
                 self._handle_event(message)
-            except Exception as e:
+            except Exception as exc:
                 logger.exception(
-                    f"事件消费者处理失败: {e}",
-                    extra={"event": "event_worker_failed"}
+                    f"事件消费者处理失败: {exc}",
+                    extra={"event": "event_worker_failed"},
                 )
             finally:
                 event_queue.task_done()
 
         logger.info("事件消费者退出", extra={"event": "event_worker_stop"})
 
-    def start(self):
+    def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
-    def stop(self):
+    def stop(self) -> None:
         self._running = False
         if self._thread:
             self._thread.join(timeout=2.0)

@@ -1,16 +1,26 @@
+from __future__ import annotations
+
+from typing import Any, Callable
+
 import allure
 import pytest
 
+from tests.utils.api_client import APIClient
 from tests.utils.assertions import assert_event_item_schema
+from tests.utils.redis_helper import RedisHelper
 
 
 @allure.epic("Occupancy System")
 @allure.feature("Redis Cache")
 @pytest.mark.redis
 @pytest.mark.regression
-def test_status_cache_exists_after_status_api_call(client, redis_helper, attach_kv):
+def test_status_cache_exists_after_status_api_call(
+    client: APIClient,
+    redis_helper: RedisHelper,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("先请求状态接口，触发缓存写入"):
-        api_data = client.get("/api/status").json()
+        api_data: dict[str, Any] = client.get("/api/status").json()
         attach_kv("status_api_data", api_data)
 
     with allure.step("检查 Redis 中 occupancy:status 是否存在"):
@@ -24,7 +34,11 @@ def test_status_cache_exists_after_status_api_call(client, redis_helper, attach_
 @allure.feature("Redis Cache")
 @pytest.mark.redis
 @pytest.mark.regression
-def test_status_cache_content_structure(redis_helper, client, attach_kv):
+def test_status_cache_content_structure(
+    redis_helper: RedisHelper,
+    client: APIClient,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("请求状态接口，确保缓存被刷新"):
         client.get("/api/status")
 
@@ -43,9 +57,13 @@ def test_status_cache_content_structure(redis_helper, client, attach_kv):
 @allure.feature("Redis Cache")
 @pytest.mark.redis
 @pytest.mark.regression
-def test_status_cache_and_api_basic_consistency(redis_helper, client, attach_kv):
+def test_status_cache_and_api_basic_consistency(
+    redis_helper: RedisHelper,
+    client: APIClient,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("请求状态接口"):
-        api_data = client.get("/api/status").json()
+        api_data: dict[str, Any] = client.get("/api/status").json()
         attach_kv("status_api_data", api_data)
 
     with allure.step("读取 Redis 状态缓存"):
@@ -61,9 +79,13 @@ def test_status_cache_and_api_basic_consistency(redis_helper, client, attach_kv)
 @allure.feature("Redis Cache")
 @pytest.mark.redis
 @pytest.mark.regression
-def test_events_cache_readable(redis_helper, client, attach_kv):
+def test_events_cache_readable(
+    redis_helper: RedisHelper,
+    client: APIClient,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("请求事件接口"):
-        api_data = client.get("/api/events?limit=10").json()
+        api_data: dict[str, Any] = client.get("/api/events?limit=10").json()
         attach_kv("events_api_data", api_data)
 
     with allure.step("读取 Redis 最近事件缓存"):
@@ -79,9 +101,13 @@ def test_events_cache_readable(redis_helper, client, attach_kv):
 @allure.feature("Redis Cache")
 @pytest.mark.redis
 @pytest.mark.regression
-def test_events_cache_and_api_basic_consistency(redis_helper, client, attach_kv):
+def test_events_cache_and_api_basic_consistency(
+    redis_helper: RedisHelper,
+    client: APIClient,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("请求事件接口并读取 Redis 事件缓存"):
-        api_events = client.get("/api/events?limit=5").json()["events"]
+        api_events: list[dict[str, Any]] = client.get("/api/events?limit=5").json()["events"]
         cache_events = redis_helper.lrange_json("occupancy:events", 0, 4)
         attach_kv("events_api_data", api_events)
         attach_kv("events_cache_data", cache_events)
@@ -97,7 +123,10 @@ def test_events_cache_and_api_basic_consistency(redis_helper, client, attach_kv)
 @allure.feature("Redis Cache")
 @pytest.mark.redis
 @pytest.mark.regression
-def test_manual_test_cache_control(redis_helper, attach_kv):
+def test_manual_test_cache_control(
+    redis_helper: RedisHelper,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("写入测试专用缓存 key"):
         redis_helper.set_json("occupancy:test_status", {"ok": True, "source": "pytest"})
 

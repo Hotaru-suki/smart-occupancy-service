@@ -50,7 +50,7 @@
 ```json
 {
   "service": "Occupancy Detection Service",
-  "version": "1.2.0",
+  "version": "0.7",
   "mock": true,
   "supports_video": false,
   "ui": "/ui/"

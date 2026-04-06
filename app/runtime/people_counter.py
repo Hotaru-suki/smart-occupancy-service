@@ -1,8 +1,10 @@
-import cv2
-import threading
 import json
+import threading
 import time
 from datetime import datetime, date
+from typing import Any
+
+import cv2
 
 from ultralytics import YOLO
 
@@ -19,17 +21,17 @@ from app.services.event_service import event_service
 class PeopleCounter(BaseCounter):
     def __init__(
         self,
-        video_source=0,
-        model_path="yolov8n.pt",
-        roi=None,
+        video_source: int | str = 0,
+        model_path: str = "yolov8n.pt",
+        roi: tuple[int, int, int, int] | None = None,
         region_id: int = 1,
-        enter_frames=5,
-        leave_seconds=2.0,
-        confidence=0.4,
-        reconnect_interval=2.0,
-        loop_interval=0.05,
-        mock=False
-    ):
+        enter_frames: int = 5,
+        leave_seconds: float = 2.0,
+        confidence: float = 0.4,
+        reconnect_interval: float = 2.0,
+        loop_interval: float = 0.05,
+        mock: bool = False,
+    ) -> None:
         self.video_source = video_source
         self.model_path = model_path
         self.model = YOLO(model_path)
@@ -80,20 +82,21 @@ class PeopleCounter(BaseCounter):
         self._refresh_status_snapshot()
 
         logger.info(
-            f"PeopleCounter 初始化完成: source={self.video_source}, roi={self.roi}, region_id={self.region_id}",
-            extra={"event": "people_counter_init"}
+            "PeopleCounter 初始化完成: "
+            f"source={self.video_source}, roi={self.roi}, region_id={self.region_id}",
+            extra={"event": "people_counter_init"},
         )
 
-    def _now(self):
+    def _now(self) -> datetime:
         return datetime.now()
 
-    def _now_str(self):
+    def _now_str(self) -> str:
         return self._now().isoformat(timespec="seconds")
 
     def supports_video(self) -> bool:
         return True
 
-    def _open_capture(self):
+    def _open_capture(self) -> bool:
         if self.cap is not None:
             try:
                 self.cap.release()
@@ -116,12 +119,12 @@ class PeopleCounter(BaseCounter):
 
         return self.camera_ok
 
-    def _append_event(self, event_type, people_count):
+    def _append_event(self, event_type: str, people_count: int) -> None:
         event = {
             "timestamp": self._now_str(),
             "region_id": self.region_id,
             "event": event_type,
-            "people_count": people_count
+            "people_count": people_count,
         }
 
         self.events.append(event)
@@ -129,21 +132,21 @@ class PeopleCounter(BaseCounter):
 
         event_service.publish_occupancy_event(self.region_id, event_type, people_count)
 
-    def _sync_daily_stat_to_mysql(self):
+    def _sync_daily_stat_to_mysql(self) -> None:
         now = time.time()
         if now - self._last_stat_sync_at < settings.stat_sync_interval_sec:
             return
         try:
             self.stat_repository.upsert_today(
                 max_people=self.max_people_today,
-                total_occupied_sec=self.today_total_occupied_sec
+                total_occupied_sec=self.today_total_occupied_sec,
             )
             self._last_stat_sync_at = now
-        except Exception as e:
-            self.last_error = f"MySQL每日统计同步失败: {e}"
+        except Exception as exc:
+            self.last_error = f"MySQL每日统计同步失败: {exc}"
             logger.exception(
                 self.last_error,
-                extra={"event": "mysql_daily_stat_sync_failed"}
+                extra={"event": "mysql_daily_stat_sync_failed"},
             )
 
     def _reset_daily_if_needed(self):
@@ -156,10 +159,10 @@ class PeopleCounter(BaseCounter):
 
             logger.info(
                 f"检测到日期切换，重置当日统计: current_day={self.current_day}",
-                extra={"event": "daily_stat_reset"}
+                extra={"event": "daily_stat_reset"},
             )
 
-    def _refresh_status_snapshot(self):
+    def _refresh_status_snapshot(self) -> None:
         occupied_duration_sec = 0.0
         if self.occupied and self.occupied_since is not None:
             occupied_duration_sec = time.time() - self.occupied_since
@@ -179,23 +182,26 @@ class PeopleCounter(BaseCounter):
                 "x1": self.roi[0],
                 "y1": self.roi[1],
                 "x2": self.roi[2],
-                "y2": self.roi[3]
+                "y2": self.roi[3],
             },
             "camera_ok": self.camera_ok,
             "detector_ok": self.detector_ok,
             "running": self.running,
             "last_frame_time": self.last_frame_time,
             "last_error": self.last_error,
-            "timestamp": self._now_str()
+            "timestamp": self._now_str(),
         }
 
         try:
-            redis_client.set("occupancy:status", json.dumps(self._status_snapshot, ensure_ascii=False))
-        except Exception as e:
-            self.last_error = f"Redis状态缓存失败: {e}"
+            redis_client.set(
+                "occupancy:status",
+                json.dumps(self._status_snapshot, ensure_ascii=False),
+            )
+        except Exception as exc:
+            self.last_error = f"Redis状态缓存失败: {exc}"
             logger.error(
                 self.last_error,
-                extra={"event": "redis_status_cache_failed"}
+                extra={"event": "redis_status_cache_failed"},
             )
 
     def _draw_overlay(self, frame, results, people_in_roi):
@@ -210,7 +216,7 @@ class PeopleCounter(BaseCounter):
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
             (0, 255, 255),
-            2
+            2,
         )
 
         if results.boxes is not None:
@@ -282,7 +288,7 @@ class PeopleCounter(BaseCounter):
 
                 logger.info(
                     f"区域进入事件触发: region_id={self.region_id}, people_count={people_in_roi}",
-                    extra={"event": "enter_region"}
+                    extra={"event": "enter_region"},
                 )
         else:
             self._inside_frame_count = 0
@@ -301,13 +307,13 @@ class PeopleCounter(BaseCounter):
 
                     logger.info(
                         f"区域离开事件触发: region_id={self.region_id}",
-                        extra={"event": "leave_region"}
+                        extra={"event": "leave_region"},
                     )
 
-    def process_frame(self):
+    def process_frame(self) -> None:
         logger.info(
             "视频处理线程启动",
-            extra={"event": "video_thread_start"}
+            extra={"event": "video_thread_start"},
         )
         self.running = True
 
@@ -315,7 +321,7 @@ class PeopleCounter(BaseCounter):
             self.last_error = "摄像头打开失败，进入重连模式。"
             logger.error(
                 self.last_error,
-                extra={"event": "camera_open_failed"}
+                extra={"event": "camera_open_failed"},
             )
 
         while self.running:
@@ -335,7 +341,7 @@ class PeopleCounter(BaseCounter):
                     self.last_error = "读取摄像头帧失败，准备重连。"
                     logger.error(
                         self.last_error,
-                        extra={"event": "camera_read_failed"}
+                        extra={"event": "camera_read_failed"},
                     )
                     try:
                         self.cap.release()
@@ -377,15 +383,15 @@ class PeopleCounter(BaseCounter):
                     self._sync_daily_stat_to_mysql()
                     self._refresh_status_snapshot()
 
-            except Exception as e:
+            except Exception as exc:
                 with self.lock:
                     self.detector_ok = False
-                    self.last_error = f"检测线程异常: {e}"
+                    self.last_error = f"检测线程异常: {exc}"
                     self._refresh_status_snapshot()
 
                 logger.exception(
                     self.last_error,
-                    extra={"event": "detect_thread_exception"}
+                    extra={"event": "detect_thread_exception"},
                 )
                 time.sleep(0.3)
 
@@ -393,10 +399,10 @@ class PeopleCounter(BaseCounter):
 
         logger.info(
             "视频处理线程退出",
-            extra={"event": "video_thread_stop"}
+            extra={"event": "video_thread_stop"},
         )
 
-    def start(self):
+    def start(self) -> None:
         with self.lock:
             if self.running:
                 return
@@ -408,10 +414,10 @@ class PeopleCounter(BaseCounter):
 
         logger.info(
             "PeopleCounter 启动",
-            extra={"event": "people_counter_start"}
+            extra={"event": "people_counter_start"},
         )
 
-    def stop(self):
+    def stop(self) -> None:
         with self.lock:
             self.running = False
 
@@ -427,10 +433,10 @@ class PeopleCounter(BaseCounter):
 
         logger.info(
             "PeopleCounter 停止",
-            extra={"event": "people_counter_stop"}
+            extra={"event": "people_counter_stop"},
         )
 
-    def get_status(self):
+    def get_status(self) -> dict[str, Any]:
         with self.lock:
             snapshot = dict(self._status_snapshot)
 
@@ -442,11 +448,11 @@ class PeopleCounter(BaseCounter):
             snapshot["timestamp"] = self._now_str()
             return snapshot
 
-    def get_events(self, limit=20):
+    def get_events(self, limit: int = 20) -> list[dict[str, Any]]:
         with self.lock:
             return list(self.events[-limit:])
 
-    def get_health(self):
+    def get_health(self) -> dict[str, Any]:
         with self.lock:
             return {
                 "mock": self.mock,
@@ -456,10 +462,10 @@ class PeopleCounter(BaseCounter):
                 "detector_ok": self.detector_ok,
                 "last_frame_time": self.last_frame_time,
                 "last_error": self.last_error,
-                "timestamp": self._now_str()
+                "timestamp": self._now_str(),
             }
 
-    def update_roi(self, roi: tuple[int, int, int, int]):
+    def update_roi(self, roi: tuple[int, int, int, int]) -> None:
         with self.lock:
             self.roi = roi
             self._refresh_status_snapshot()

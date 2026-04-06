@@ -12,14 +12,18 @@ class EventService:
             event_queue.put_nowait(message)
         except Full:
             logger.error(
-                f"事件队列已满，丢弃事件: region_id={region_id}, event_type={event_type}, people_count={people_count}",
-                extra={"event": "event_queue_full"}
+                "事件队列已满，丢弃事件: "
+                f"region_id={region_id}, event_type={event_type}, "
+                f"people_count={people_count}",
+                extra={"event": "event_queue_full"},
             )
             return
 
         logger.info(
-            f"事件已投递到队列: region_id={region_id}, event_type={event_type}, people_count={people_count}",
-            extra={"event": "event_published"}
+            "事件已投递到队列: "
+            f"region_id={region_id}, event_type={event_type}, "
+            f"people_count={people_count}",
+            extra={"event": "event_published"},
         )
 
 

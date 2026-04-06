@@ -3,7 +3,7 @@ import getpass
 from app.security.passwords import hash_password
 
 
-def main():
+def main() -> None:
     password = getpass.getpass("Password: ")
     confirm = getpass.getpass("Confirm : ")
     if password != confirm:

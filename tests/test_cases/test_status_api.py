@@ -1,6 +1,13 @@
+from __future__ import annotations
+
+from typing import Any, Callable
+
 import allure
 import pytest
+from requests import Response
 
+from tests.utils.api_client import APIClient
+from tests.utils.redis_helper import RedisHelper
 from tests.utils.assertions import (
     assert_bool_field,
     assert_iso_datetime_like,
@@ -14,7 +21,10 @@ from tests.utils.assertions import (
 @pytest.mark.smoke
 @pytest.mark.api
 @pytest.mark.regression
-def test_status_api_status_code(client, attach_response):
+def test_status_api_status_code(
+    client: APIClient,
+    attach_response: Callable[[Response, str], None],
+) -> None:
     with allure.step("请求 /api/status"):
         resp = client.get("/api/status")
         attach_response(resp, "status")
@@ -25,10 +35,13 @@ def test_status_api_status_code(client, attach_response):
 @allure.feature("Status API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_status_api_schema(client, attach_response):
+def test_status_api_schema(
+    client: APIClient,
+    attach_response: Callable[[Response, str], None],
+) -> None:
     with allure.step("校验 /api/status 返回结构"):
         resp = client.get("/api/status")
-        data = resp.json()
+        data: dict[str, Any] = resp.json()
         attach_response(resp, "status")
 
     required_fields = [
@@ -81,9 +94,12 @@ def test_status_api_schema(client, attach_response):
 @allure.feature("Status API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_status_logic_basic(client, attach_kv):
+def test_status_logic_basic(
+    client: APIClient,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("校验 /api/status 基础业务逻辑"):
-        data = client.get("/api/status").json()
+        data: dict[str, Any] = client.get("/api/status").json()
         attach_kv("status_data", data)
 
     assert data["status"] in ["idle", "occupied"]
@@ -102,10 +118,13 @@ def test_status_logic_basic(client, attach_kv):
 @allure.feature("Status API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_root_and_status_consistency(client, attach_kv):
+def test_root_and_status_consistency(
+    client: APIClient,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("校验根接口与状态接口的 mock / supports_video 一致性"):
-        root_data = client.get("/").json()
-        status_data = client.get("/api/status").json()
+        root_data: dict[str, Any] = client.get("/").json()
+        status_data: dict[str, Any] = client.get("/api/status").json()
         attach_kv("root_data", root_data)
         attach_kv("status_data", status_data)
 
@@ -117,9 +136,13 @@ def test_root_and_status_consistency(client, attach_kv):
 @allure.feature("Status API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_status_cache_consistency(client, redis_helper, attach_kv):
+def test_status_cache_consistency(
+    client: APIClient,
+    redis_helper: RedisHelper,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("请求状态接口并读取 Redis 缓存"):
-        api_data = client.get("/api/status").json()
+        api_data: dict[str, Any] = client.get("/api/status").json()
         cache_data = redis_helper.get_json("occupancy:status")
         attach_kv("status_api_data", api_data)
         attach_kv("status_cache_data", cache_data)
@@ -139,7 +162,10 @@ def test_status_cache_consistency(client, redis_helper, attach_kv):
 @allure.feature("Status API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_status_post_method_not_allowed(client, attach_response):
+def test_status_post_method_not_allowed(
+    client: APIClient,
+    attach_response: Callable[[Response, str], None],
+) -> None:
     with allure.step("校验 /api/status 不接受 POST 请求"):
         resp = client.post("/api/status", json={})
         attach_response(resp, "status_post")
@@ -151,9 +177,12 @@ def test_status_post_method_not_allowed(client, attach_response):
 @allure.feature("Status API")
 @pytest.mark.api
 @pytest.mark.mock_only
-def test_mock_mode_video_expectation(client, attach_kv):
+def test_mock_mode_video_expectation(
+    client: APIClient,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("mock 模式下 supports_video 应为 false"):
-        data = client.get("/api/status").json()
+        data: dict[str, Any] = client.get("/api/status").json()
         attach_kv("status_data", data)
     assert data["mock"] is True
     assert data["supports_video"] is False

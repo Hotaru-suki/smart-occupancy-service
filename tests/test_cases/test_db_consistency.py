@@ -1,12 +1,22 @@
+from __future__ import annotations
+
+from typing import Any, Callable
+
 import allure
 import pytest
+
+from tests.utils.api_client import APIClient
+from tests.utils.mysql_helper import MySQLHelper
 
 
 @allure.epic("Occupancy System")
 @allure.feature("DB Consistency")
 @pytest.mark.db
 @pytest.mark.regression
-def test_daily_stats_table_accessible(mysql_helper, attach_kv):
+def test_daily_stats_table_accessible(
+    mysql_helper: MySQLHelper,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("确认 daily_stats 表可访问"):
         row = mysql_helper.get_today_stat()
         attach_kv("latest_daily_stat", row)
@@ -17,7 +27,10 @@ def test_daily_stats_table_accessible(mysql_helper, attach_kv):
 @allure.feature("DB Consistency")
 @pytest.mark.db
 @pytest.mark.regression
-def test_occupancy_events_table_accessible(mysql_helper, attach_kv):
+def test_occupancy_events_table_accessible(
+    mysql_helper: MySQLHelper,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("确认 occupancy_events 表可访问"):
         row = mysql_helper.get_latest_event()
         attach_kv("latest_event", row)
@@ -28,9 +41,13 @@ def test_occupancy_events_table_accessible(mysql_helper, attach_kv):
 @allure.feature("DB Consistency")
 @pytest.mark.db
 @pytest.mark.regression
-def test_status_and_daily_stats_basic_consistency(client, mysql_helper, attach_kv):
+def test_status_and_daily_stats_basic_consistency(
+    client: APIClient,
+    mysql_helper: MySQLHelper,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("获取状态接口数据"):
-        status_data = client.get("/api/status").json()
+        status_data: dict[str, Any] = client.get("/api/status").json()
         attach_kv("status_api_data", status_data)
 
     with allure.step("获取数据库中最新统计数据"):
@@ -48,7 +65,10 @@ def test_status_and_daily_stats_basic_consistency(client, mysql_helper, attach_k
 @allure.feature("DB Consistency")
 @pytest.mark.db
 @pytest.mark.regression
-def test_latest_event_record_fields(mysql_helper, attach_kv):
+def test_latest_event_record_fields(
+    mysql_helper: MySQLHelper,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("获取数据库中最新事件记录"):
         event = mysql_helper.get_latest_event()
         attach_kv("latest_event", event)
@@ -64,9 +84,15 @@ def test_latest_event_record_fields(mysql_helper, attach_kv):
 @allure.feature("DB Consistency")
 @pytest.mark.db
 @pytest.mark.regression
-def test_latest_event_and_events_api_basic_consistency(client, mysql_helper, attach_kv):
+def test_latest_event_and_events_api_basic_consistency(
+    client: APIClient,
+    mysql_helper: MySQLHelper,
+    attach_kv: Callable[[str, Any], None],
+) -> None:
     with allure.step("获取事件接口第一条记录"):
-        api_events = client.get("/api/events?limit=1").json().get("events", [])
+        api_events: list[dict[str, Any]] = (
+            client.get("/api/events?limit=1").json().get("events", [])
+        )
         attach_kv("events_api_data", api_events)
 
     with allure.step("获取数据库最新事件"):

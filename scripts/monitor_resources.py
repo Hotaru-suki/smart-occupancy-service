@@ -1,8 +1,10 @@
+import argparse
 import csv
 import os
 import time
-import argparse
+from argparse import Namespace
 from datetime import datetime
+from typing import Any
 
 import psutil
 
@@ -17,8 +19,8 @@ def ensure_parent_dir(file_path: str) -> None:
         os.makedirs(parent, exist_ok=True)
 
 
-def find_processes_by_keyword(keyword: str):
-    matched = []
+def find_processes_by_keyword(keyword: str) -> list[psutil.Process]:
+    matched: list[psutil.Process] = []
     keyword = keyword.lower()
 
     for proc in psutil.process_iter(["pid", "name", "cmdline"]):
@@ -35,7 +37,7 @@ def find_processes_by_keyword(keyword: str):
     return matched
 
 
-def collect_system_metrics():
+def collect_system_metrics() -> dict[str, float]:
     vm = psutil.virtual_memory()
     disk = psutil.disk_usage("C:\\")
 
@@ -50,7 +52,7 @@ def collect_system_metrics():
     }
 
 
-def collect_process_metrics(processes):
+def collect_process_metrics(processes: list[psutil.Process]) -> dict[str, Any]:
     total_cpu = 0.0
     total_rss_mb = 0.0
     total_threads = 0
@@ -80,7 +82,11 @@ def collect_process_metrics(processes):
     }
 
 
-def append_summary(summary_output: str, label: str, samples: list):
+def append_summary(
+    summary_output: str,
+    label: str,
+    samples: list[dict[str, Any]],
+) -> None:
     if not summary_output or not samples:
         return
 
@@ -129,7 +135,7 @@ def append_summary(summary_output: str, label: str, samples: list):
         writer.writerow(row)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Monitor system and process resources.")
     parser.add_argument("--interval", type=float, default=1.0)
     parser.add_argument("--duration", type=int, default=0)
@@ -139,7 +145,7 @@ def main():
     parser.add_argument("--summary-output", type=str, default="")
     parser.add_argument("--stop-flag", type=str, default="monitor.stop")
 
-    args = parser.parse_args()
+    args: Namespace = parser.parse_args()
 
     ensure_parent_dir(args.output)
     ensure_parent_dir(args.stop_flag)
@@ -200,7 +206,7 @@ def main():
             if os.path.exists(args.stop_flag):
                 break
 
-            if args.duration > 0 and (time.time() - start_time) >= args.duration:
+            if 0 < args.duration <= (time.time() - start_time):
                 break
 
             time.sleep(args.interval)

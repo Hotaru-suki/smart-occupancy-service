@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 websockets
 sqlalchemy
 pymysql
@@ -10,9 +10,7 @@ aiortc
 av
 pydantic
 pydantic-settings
-pytest
 requests
-allure-pytest
 psutil
-allure-python-commons
 websocket-client
+numpy

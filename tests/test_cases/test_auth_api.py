@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 
 import allure
@@ -17,6 +19,10 @@ from tests.utils.env_loader import get_env
 AUTH_RATE_LIMIT_MAX_ATTEMPTS = int(get_env("AUTH_RATE_LIMIT_MAX_ATTEMPTS", "8"))
 
 
+def _json(response) -> dict:
+    return response.json()
+
+
 @allure.epic("Occupancy System")
 @allure.feature("Auth API")
 @pytest.mark.api
@@ -25,9 +31,10 @@ def test_admin_login_success_returns_session_cookie(fresh_client, attach_respons
     resp = fresh_client.post("/api/auth/login", json=login_payload())
     attach_response(resp, "auth_admin_login_success")
 
+    data = _json(resp)
     assert resp.status_code == 200
-    assert resp.json()["authenticated"] is True
-    assert resp.json()["role"] == "admin"
+    assert data["authenticated"] is True
+    assert data["role"] == "admin"
 
 
 @allure.epic("Occupancy System")
@@ -43,12 +50,14 @@ def test_viewer_register_then_login_success(fresh_client, unique_username, attac
         "/api/auth/login",
         json=login_payload(unique_username, "ValidPass123!"),
     )
-    attach_kv("viewer_register", register_resp.json())
-    attach_kv("viewer_login", login_resp.json())
+    register_data = _json(register_resp)
+    login_data = _json(login_resp)
+    attach_kv("viewer_register", register_data)
+    attach_kv("viewer_login", login_data)
 
     assert register_resp.status_code == 201
     assert login_resp.status_code == 200
-    assert login_resp.json()["role"] == "viewer"
+    assert login_data["role"] == "viewer"
 
 
 @allure.epic("Occupancy System")
@@ -82,7 +91,7 @@ def test_admin_register_success_with_valid_code(fresh_client, unique_username, a
     attach_response(resp, "auth_admin_register_success")
 
     assert resp.status_code == 201
-    assert resp.json()["role"] == "admin"
+    assert _json(resp)["role"] == "admin"
 
 
 @allure.epic("Occupancy System")
@@ -102,7 +111,12 @@ def test_admin_register_success_with_valid_code(fresh_client, unique_username, a
         ({"username": "../../admin", "password": "WrongPass123!"}, 422),
     ],
 )
-def test_login_rejects_invalid_role_and_injection_inputs(fresh_client, payload, expected_status, attach_response):
+def test_login_rejects_invalid_role_and_injection_inputs(
+    fresh_client,
+    payload,
+    expected_status,
+    attach_response,
+):
     resp = fresh_client.post(
         "/api/auth/login",
         json=payload,
@@ -127,7 +141,12 @@ def test_login_rejects_invalid_role_and_injection_inputs(fresh_client, payload, 
         ({"username": "';drop-table--", "password": "ValidPass123!", "role": "viewer"}, 422),
     ],
 )
-def test_register_validates_role_boundaries_and_special_inputs(fresh_client, payload, expected_status, attach_response):
+def test_register_validates_role_boundaries_and_special_inputs(
+    fresh_client,
+    payload,
+    expected_status,
+    attach_response,
+):
     resp = fresh_client.post("/api/auth/register", json=payload)
     attach_response(resp, "auth_register_validation")
     assert resp.status_code == expected_status
@@ -137,23 +156,33 @@ def test_register_validates_role_boundaries_and_special_inputs(fresh_client, pay
 @allure.feature("Auth API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_register_is_idempotent_for_same_credentials_and_role(fresh_client, unique_username, attach_kv):
+def test_register_is_idempotent_for_same_credentials_and_role(
+    fresh_client,
+    unique_username,
+    attach_kv,
+):
     payload = register_payload(unique_username, "ValidPass123!", role="viewer")
     first = fresh_client.post("/api/auth/register", json=payload)
     second = fresh_client.post("/api/auth/register", json=payload)
-    attach_kv("register_first", first.json())
-    attach_kv("register_second", second.json())
+    first_data = _json(first)
+    second_data = _json(second)
+    attach_kv("register_first", first_data)
+    attach_kv("register_second", second_data)
 
     assert first.status_code == 201
     assert second.status_code == 200
-    assert second.json()["created"] is False
+    assert second_data["created"] is False
 
 
 @allure.epic("Occupancy System")
 @allure.feature("Auth API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_register_conflicts_when_same_username_diff_role_or_password(fresh_client, unique_username, attach_response):
+def test_register_conflicts_when_same_username_diff_role_or_password(
+    fresh_client,
+    unique_username,
+    attach_response,
+):
     fresh_client.post(
         "/api/auth/register",
         json=register_payload(unique_username, "ValidPass123!", role="viewer"),
@@ -175,28 +204,40 @@ def test_register_conflicts_when_same_username_diff_role_or_password(fresh_clien
 @allure.feature("Auth API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_login_rate_limit_after_repeated_failures(fresh_client, attach_response):
-    headers = {"x-forwarded-for": "203.0.113.66"}
+def test_login_rate_limit_after_repeated_failures(fresh_client, redis_helper, attach_response):
+    client_id = f"rate-limit-{uuid.uuid4().hex}"
+    headers = {"x-forwarded-for": client_id}
+    fail_key = f"auth:login_fail:{client_id}:{AUTH_USERNAME.lower()}"
+    lock_key = f"auth:login_lock:{client_id}:{AUTH_USERNAME.lower()}"
+
+    redis_helper.delete_key(fail_key)
+    redis_helper.delete_key(lock_key)
+
     failure_response = None
-    for _ in range(AUTH_RATE_LIMIT_MAX_ATTEMPTS - 1):
-        failure_response = fresh_client.post(
+    try:
+        for _ in range(AUTH_RATE_LIMIT_MAX_ATTEMPTS - 1):
+            failure_response = fresh_client.post(
+                "/api/auth/login",
+                json=login_payload(password="WrongPass123!"),
+                headers=headers,
+            )
+            assert failure_response.status_code == 401
+
+        limited = fresh_client.post(
             "/api/auth/login",
             json=login_payload(password="WrongPass123!"),
             headers=headers,
         )
-        assert failure_response.status_code == 401
+        attach_response(failure_response, "auth_login_failure_before_limit")
+        attach_response(limited, "auth_login_rate_limited")
 
-    limited = fresh_client.post(
-        "/api/auth/login",
-        json=login_payload(password="WrongPass123!"),
-        headers=headers,
-    )
-    attach_response(failure_response, "auth_login_failure_before_limit")
-    attach_response(limited, "auth_login_rate_limited")
-
-    assert limited.status_code == 429
-    assert limited.json()["retry_after_sec"] is not None
-    assert limited.json()["remaining_attempts"] == 0
+        limited_data = _json(limited)
+        assert limited.status_code == 429
+        assert limited_data["retry_after_sec"] is not None
+        assert limited_data["remaining_attempts"] == 0
+    finally:
+        redis_helper.delete_key(fail_key)
+        redis_helper.delete_key(lock_key)
 
 
 @allure.epic("Occupancy System")
@@ -204,7 +245,7 @@ def test_login_rate_limit_after_repeated_failures(fresh_client, attach_response)
 @pytest.mark.api
 @pytest.mark.regression
 def test_session_endpoint_after_login(client, attach_kv):
-    data = client.get("/api/auth/session").json()
+    data = _json(client.get("/api/auth/session"))
     attach_kv("auth_session", data)
     assert data["authenticated"] is True
     assert data["username"] == AUTH_USERNAME.lower()
@@ -225,11 +266,12 @@ def test_logout_clears_session_cookie(registered_user, fresh_client, attach_kv):
     )
     logout_resp = fresh_client.post("/api/auth/logout")
     session_resp = fresh_client.get("/api/auth/session")
-    attach_kv("logout_response", logout_resp.json())
-    attach_kv("session_after_logout", session_resp.json())
+    attach_kv("logout_response", _json(logout_resp))
+    session_data = _json(session_resp)
+    attach_kv("session_after_logout", session_data)
 
     assert logout_resp.status_code == 200
-    assert session_resp.json()["authenticated"] is False
+    assert session_data["authenticated"] is False
 
 
 @allure.epic("Occupancy System")
@@ -251,8 +293,8 @@ def test_viewer_can_change_own_password(fresh_client, unique_username, attach_kv
         "/api/auth/password",
         json={"current_password": original_password, "new_password": new_password},
     )
-    attach_kv("viewer_change_password_login", login_resp.json())
-    attach_kv("viewer_change_password_response", change_resp.json())
+    attach_kv("viewer_change_password_login", _json(login_resp))
+    attach_kv("viewer_change_password_response", _json(change_resp))
 
     fresh_login_old = fresh_client.post(
         "/api/auth/login",
@@ -305,7 +347,11 @@ def test_admin_can_change_own_password(fresh_client, unique_username, attach_res
 @allure.feature("Auth API")
 @pytest.mark.api
 @pytest.mark.regression
-def test_change_password_rejects_wrong_current_password(fresh_client, unique_username, attach_response):
+def test_change_password_rejects_wrong_current_password(
+    fresh_client,
+    unique_username,
+    attach_response,
+):
     password = "ValidPass123!"
     fresh_client.post(
         "/api/auth/register",
@@ -347,13 +393,15 @@ def test_viewer_session_after_login_without_role_hint(fresh_client, unique_usern
         json=login_payload(unique_username, "ValidPass123!"),
     )
     session_resp = fresh_client.get("/api/auth/session")
-    attach_kv("viewer_session_login", login_resp.json())
-    attach_kv("viewer_session_state", session_resp.json())
+    login_data = _json(login_resp)
+    session_data = _json(session_resp)
+    attach_kv("viewer_session_login", login_data)
+    attach_kv("viewer_session_state", session_data)
 
     assert login_resp.status_code == 200
-    assert login_resp.json()["role"] == "viewer"
-    assert session_resp.json()["authenticated"] is True
-    assert session_resp.json()["role"] == "viewer"
+    assert login_data["role"] == "viewer"
+    assert session_data["authenticated"] is True
+    assert session_data["role"] == "viewer"
 
 
 @allure.epic("Occupancy System")
@@ -377,14 +425,34 @@ def test_login_with_explicit_wrong_role_is_rejected(fresh_client, unique_usernam
 @allure.feature("Auth API")
 @pytest.mark.api
 @pytest.mark.regression
-@pytest.mark.parametrize("path", ["/", "/api/health", "/api/auth/session", "/api/auth/login", "/api/auth/register"])
+@pytest.mark.parametrize(
+    "path",
+    ["/", "/api/health", "/api/auth/session", "/api/auth/login", "/api/auth/register"],
+)
 def test_public_endpoints_do_not_redirect(path, fresh_client):
     method = "POST" if path in {"/api/auth/login", "/api/auth/register"} else "GET"
-    payload = login_payload("demo_user", "ValidPass123!") if path == "/api/auth/login" else (
-        register_payload("demo_user", "ValidPass123!", role="viewer") if path == "/api/auth/register" else None
+    demo_username = f"demo_{uuid.uuid4().hex[:12]}"
+    payload = (
+        login_payload(demo_username, "ValidPass123!")
+        if path == "/api/auth/login"
+        else (
+            register_payload(demo_username, "ValidPass123!", role="viewer")
+            if path == "/api/auth/register"
+            else None
+        )
     )
-    headers = {"x-forwarded-for": "203.0.113.10"} if path == "/api/auth/login" else None
-    response = fresh_client.request(method, path, json=payload, headers=headers, allow_redirects=False)
+    headers = (
+        {"x-forwarded-for": f"203.0.113.{uuid.uuid4().int % 200 + 1}"}
+        if path == "/api/auth/login"
+        else None
+    )
+    response = fresh_client.request(
+        method,
+        path,
+        json=payload,
+        headers=headers,
+        allow_redirects=False,
+    )
     assert_no_redirect(response)
 
 
@@ -392,9 +460,22 @@ def test_public_endpoints_do_not_redirect(path, fresh_client):
 @allure.feature("Auth API")
 @pytest.mark.api
 @pytest.mark.regression
-@pytest.mark.parametrize("path", ["/api/status", "/api/events", "/api/history/events", "/api/webrtc-offer", "/api/auth/password"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/status",
+        "/api/events",
+        "/api/history/events",
+        "/api/webrtc-offer",
+        "/api/auth/password",
+    ],
+)
 def test_protected_endpoints_do_not_redirect_when_unauthenticated(path, fresh_client):
-    method = "POST" if path == "/api/webrtc-offer" else ("PATCH" if path == "/api/auth/password" else "GET")
+    method = (
+        "POST"
+        if path == "/api/webrtc-offer"
+        else ("PATCH" if path == "/api/auth/password" else "GET")
+    )
     payload = (
         {"sdp": "fake", "type": "offer"} if method == "POST" else (
             {"current_password": "ValidPass123!", "new_password": "ValidPass456!"}
