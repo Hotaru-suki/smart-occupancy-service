@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory = $true)][string]$Host,
+    [Parameter(Mandatory = $true)][string]$TargetHost,
     [Parameter(Mandatory = $true)][int]$Port,
     [int]$MaxRetry = 30,
     [int]$SleepSeconds = 2
@@ -12,11 +12,11 @@ for ($i = 0; $i -lt $MaxRetry; $i++) {
     $tcpClient = $null
     try {
         $tcpClient = New-Object System.Net.Sockets.TcpClient
-        $async = $tcpClient.BeginConnect($Host, $Port, $null, $null)
+        $async = $tcpClient.BeginConnect($TargetHost, $Port, $null, $null)
         $connected = $async.AsyncWaitHandle.WaitOne(2000, $false)
         if ($connected -and $tcpClient.Connected) {
             $tcpClient.EndConnect($async)
-            Write-Host "ready ${Host}:${Port}"
+            Write-Host "ready ${TargetHost}:${Port}"
             $ready = $true
             break
         }

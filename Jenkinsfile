@@ -346,8 +346,8 @@ pipeline {
                 dir("${env.PROJECT_DIR}") {
                     bat 'docker compose up -d'
                     script {
-                        runPs(this, 'scripts\\ci\\wait_for_port.ps1', "-Host \"${params.REDIS_HOST}\" -Port ${params.REDIS_PORT} -MaxRetry 30 -SleepSeconds 2")
-                        runPs(this, 'scripts\\ci\\wait_for_port.ps1', "-Host \"${params.MYSQL_HOST}\" -Port ${params.MYSQL_PORT} -MaxRetry 30 -SleepSeconds 2")
+                        runPs(this, 'scripts\\ci\\wait_for_port.ps1', "-TargetHost \"${params.REDIS_HOST}\" -Port ${params.REDIS_PORT} -MaxRetry 30 -SleepSeconds 2")
+                        runPs(this, 'scripts\\ci\\wait_for_port.ps1', "-TargetHost \"${params.MYSQL_HOST}\" -Port ${params.MYSQL_PORT} -MaxRetry 30 -SleepSeconds 2")
                     }
                 }
             }
