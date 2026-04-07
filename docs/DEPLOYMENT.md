@@ -50,25 +50,35 @@ docker compose down
 
 ### 1. 准备环境文件
 
-```bash
-cp .env.dev .env
+```powershell
+Copy-Item .env.dev .env
 ```
 
 ### 2. 安装依赖
 
-```bash
+先在 Windows 中创建项目虚拟环境，统一使用 Windows Python 3.14 作为基座解释器：
+
+```powershell
+py -3.14 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
+
+```powershell
 pip install -r requirements-dev.txt
 ```
 
 如果只运行服务，不执行测试，也可以只安装：
 
-```bash
+```powershell
 pip install -r requirements.txt
 ```
 
+如果你在 PyCharm 里把项目解释器设成 `.venv\Scripts\python.exe`，Run/Debug 会直接使用这套环境，Terminal 也通常会自动激活。
+
 ### 3. 启动服务
 
-```bash
+```powershell
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -82,8 +92,8 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 ### 1. 切换到测试配置
 
-```bash
-cp .env.test .env
+```powershell
+Copy-Item .env.test .env
 ```
 
 ### 2. 确保依赖服务已启动
@@ -94,19 +104,19 @@ docker compose up -d
 
 ### 3. 启动应用
 
-```bash
+```powershell
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ### 4. 执行测试
 
-```bash
+```powershell
 pytest tests
 ```
 
 如果需要 Allure 结果：
 
-```bash
+```powershell
 pytest tests --alluredir=allure-results
 ```
 
@@ -155,18 +165,20 @@ Jenkins 当前需要提供这些关键值，用于生成 `.env`：
 
 ### 开发模式
 
-```bash
-cp .env.dev .env
+```powershell
+Copy-Item .env.dev .env
 docker compose up -d
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ### 测试模式
 
-```bash
-cp .env.test .env
+```powershell
+Copy-Item .env.test .env
 docker compose up -d
+.\.venv\Scripts\Activate.ps1
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 pytest tests
 ```

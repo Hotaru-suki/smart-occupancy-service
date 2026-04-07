@@ -63,8 +63,8 @@ docs/                 关键文档
 
 推荐使用方式：
 
-```bash
-cp .env.dev .env
+```powershell
+Copy-Item .env.dev .env
 ```
 
 如果是 Jenkins 流水线：
@@ -89,33 +89,43 @@ docker compose up -d
 
 首次使用可以先参考模板：
 
-```bash
-cp .env.example .env
+```powershell
+Copy-Item .env.example .env
 ```
 
 本地开发更推荐直接使用开发配置：
 
-```bash
-cp .env.dev .env
+```powershell
+Copy-Item .env.dev .env
 ```
 
 ### 3. 安装依赖
 
+推荐先在 Windows 中固定项目解释器：
+
+```powershell
+py -3.14 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
+
 只运行服务：
 
-```bash
+```powershell
 pip install -r requirements.txt
 ```
 
 开发与测试：
 
-```bash
+```powershell
 pip install -r requirements-dev.txt
 ```
 
+如果你在 PyCharm 里已经把项目解释器设成 `.venv\Scripts\python.exe`，那么 Run/Debug 会直接使用这套环境，Terminal 也通常会自动激活。
+
 ### 4. 启动后端
 
-```bash
+```powershell
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -131,19 +141,19 @@ http://127.0.0.1:8000/ui/
 
 使用测试环境配置时，推荐先复制：
 
-```bash
-cp .env.test .env
+```powershell
+Copy-Item .env.test .env
 ```
 
 然后执行：
 
-```bash
+```powershell
 pytest tests
 ```
 
 如果要生成 Allure 结果：
 
-```bash
+```powershell
 pytest tests --alluredir=allure-results
 ```
 
@@ -151,8 +161,8 @@ pytest tests --alluredir=allure-results
 
 推荐按三条链路理解：
 
-- 本地开发：`docker compose up -d` + `.env.dev` + `uvicorn`
-- 本地测试：`.env.test` + `pytest`
+- 本地开发：`Copy-Item .env.dev .env` + `docker compose up -d` + `uvicorn`
+- 本地测试：`Copy-Item .env.test .env` + `pytest`
 - Jenkins 集成：流水线基于 `.env.test.example` 和 Jenkins 环境变量生成 `.env`，然后执行依赖安装、服务启动、烟测、pytest 和 JMeter
 
 更完整的部署操作说明见：

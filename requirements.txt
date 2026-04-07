@@ -7,7 +7,7 @@ redis
 opencv-python
 ultralytics
 aiortc
-av
+av<17
 pydantic
 pydantic-settings
 requests
