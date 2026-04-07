@@ -16,6 +16,12 @@ Get-ChildItem -Path . -Directory -Filter "status-report-*" | ForEach-Object {
 Get-ChildItem -Path . -Directory -Filter "polling-report-*" | ForEach-Object {
     Remove-Item $_.FullName -Recurse -Force
 }
+Get-ChildItem -Path . -Directory -Filter "events-report-*" | ForEach-Object {
+    Remove-Item $_.FullName -Recurse -Force
+}
+Get-ChildItem -Path . -Directory -Filter "dashboard-report-*" | ForEach-Object {
+    Remove-Item $_.FullName -Recurse -Force
+}
 
 if (Test-Path "monitoring") { Remove-Item "monitoring" -Recurse -Force }
 New-Item -ItemType Directory -Path "monitoring" -Force | Out-Null
@@ -24,6 +30,12 @@ Get-ChildItem -Path . -File -Filter "status-result-*.jtl" | ForEach-Object {
     Remove-Item $_.FullName -Force
 }
 Get-ChildItem -Path . -File -Filter "polling-result-*.jtl" | ForEach-Object {
+    Remove-Item $_.FullName -Force
+}
+Get-ChildItem -Path . -File -Filter "events-result-*.jtl" | ForEach-Object {
+    Remove-Item $_.FullName -Force
+}
+Get-ChildItem -Path . -File -Filter "dashboard-result-*.jtl" | ForEach-Object {
     Remove-Item $_.FullName -Force
 }
 
